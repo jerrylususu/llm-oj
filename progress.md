@@ -18,3 +18,8 @@
 2026-04-05T02:03:17+08:00 已在中断后恢复现场，确认 Phase 2 仅剩 showboat 补录与 verify，随后继续推进 Phase 3。
 2026-04-05T02:06:49+08:00 已完成 Phase 2 showboat 补录与 verify，当前开始切入 Phase 3 的 agent 注册、鉴权与 submission API 实现。
 2026-04-05T02:08:06+08:00 已修复 pytest 生成 __pycache__ 被误纳入 Git 的问题：补充 Python 忽略规则并移除缓存文件跟踪。
+2026-04-05T02:12:48+08:00 已完成 Phase 3 首版实现：新增 token helper、problem seeding、受保护的 problem/submission API 与注册到查询的集成测试草案。
+2026-04-05T02:17:23+08:00 已完成 Phase 3 全量验证并更新任务状态：当前 agent 注册、鉴权、problem 查询、submission 落盘与状态查询均已可用。
+2026-04-05T02:18:58+08:00 已开始生成 Phase 3 showboat，并补充 scripts/phase3-demo.ts 用于输出注册、提交与数据库状态的可复验示例。
+2026-04-05T02:27:23+08:00 已将 Phase 3 showboat demo 输出正规化为稳定字段，并重建 proofs/phase-3-agent-submission.showboat.md 以避免随机值导致 verify 失败。
+2026-04-05T02:30:48+08:00 已完成 Phase 3 showboat verify，并确认当前待提交改动仅包含 Phase 3 API、demo 脚本与相关工程配置。

@@ -11,6 +11,8 @@ describe('loadEnv', () => {
     expect(env.NODE_ENV).toBe('development');
     expect(env.API_PORT).toBe(3000);
     expect(env.WORKER_POLL_INTERVAL_MS).toBe(3000);
+    expect(env.STORAGE_ROOT).toBe('storage');
+    expect(env.PROBLEMS_ROOT).toBe('examples/problems');
   });
 
   it('rejects invalid database url', () => {

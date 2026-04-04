@@ -41,3 +41,36 @@
 
 如何避免：
 只要仓库里开始引入 Python 脚本或测试，就应第一时间补齐 Python 的基础忽略规则；不要等到首次跑测试后再去清理提交污染。
+
+## 2026-04-05 自动 seed problem bundle 时误扫测试目录
+
+问题：
+`ensureProblemsSeededFromRoot()` 初版只按“problem 目录下的所有子目录都是版本目录”来扫描，结果把 `examples/problems/sample-sum/tests/` 也当成了 bundle 版本，进一步在 `tests/spec.json` 上触发 `ENOENT`。
+
+如何解决：
+把扫描条件改成“只有包含 `spec.json` 的目录才进入 `validateProblemBundle()`”，从根上把版本目录和测试目录区分开。
+
+如何避免：
+今后做自动发现文件系统资源时，不要只靠层级假设，应当基于明确的标志文件或结构特征过滤；对示例目录尤其如此，因为它天然会混入 `tests/`、`fixtures/` 之类的非运行时目录。
+
+## 2026-04-05 新增 scripts 目录后 ESLint project service 无法解析
+
+问题：
+新增 `scripts/phase3-demo.ts` 后，`eslint` 报错该文件“不在 project service 中”，原因是仓库根 `tsconfig.json` 只引用了 `apps/*` 和 `packages/*`，`scripts/` 没有自己的 `tsconfig`。
+
+如何解决：
+新增 `scripts/tsconfig.json`，并把它挂到根 `tsconfig.json` 的 `references` 中，让 `lint`、`typecheck` 和 `build` 都能一致识别这类辅助脚本。
+
+如何避免：
+后续只要往 monorepo 增加新的一级代码目录，就要同时决定它的 TypeScript 边界，至少补一份对应 `tsconfig` 并接入根工程；否则最先暴露问题的通常不是编译，而是 ESLint 的 project service。
+
+## 2026-04-05 showboat proof 不应直接输出随机值
+
+问题：
+`scripts/phase3-demo.ts` 初版直接打印随机生成的 agent id、submission id、token、时间戳和临时目录，导致 `uvx showboat verify` 在重放命令时无法匹配第一次记录下来的输出。
+
+如何解决：
+把 demo 输出正规化为稳定占位字段，只保留状态码、固定 problem/version、zip magic 和队列状态这类可重放信息，再重建 proof。
+
+如何避免：
+后续凡是要写进 showboat 的脚本输出，都要先判断是否包含随机值、时间戳、临时路径或顺序不稳定的数据；如果有，就先在脚本层做归一化，而不是等 verify 失败后再返工。

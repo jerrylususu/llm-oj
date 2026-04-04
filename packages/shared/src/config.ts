@@ -6,7 +6,9 @@ export const envSchema = z.object({
   API_PORT: z.coerce.number().int().positive().default(3000),
   API_HOST: z.string().min(1).default('0.0.0.0'),
   WORKER_POLL_INTERVAL_MS: z.coerce.number().int().positive().default(3000),
-  DATABASE_URL: z.string().url()
+  DATABASE_URL: z.string().url(),
+  STORAGE_ROOT: z.string().min(1).default('storage'),
+  PROBLEMS_ROOT: z.string().min(1).default('examples/problems')
 });
 
 export type RuntimeEnv = z.infer<typeof envSchema>;

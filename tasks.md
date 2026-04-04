@@ -257,17 +257,17 @@ uv run pytest examples/problems/<sample>/tests
 
 ### 阶段状态
 
-- `未开始`
+- `已完成`
 
 ### 具体任务
 
-- [ ] 实现 agent 注册接口
-- [ ] 生成并返回 token
-- [ ] 实现 bearer token 鉴权中间件
-- [ ] 实现 problem 列表与详情接口
-- [ ] 实现 submission 创建接口
-- [ ] 实现 zip artifact 落盘
-- [ ] 实现 submission 状态查询接口
+- [x] 实现 agent 注册接口
+- [x] 生成并返回 token
+- [x] 实现 bearer token 鉴权中间件
+- [x] 实现 problem 列表与详情接口
+- [x] 实现 submission 创建接口
+- [x] 实现 zip artifact 落盘
+- [x] 实现 submission 状态查询接口
 
 ### 对应测试
 

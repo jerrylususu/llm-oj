@@ -53,7 +53,7 @@
 
 ## 当前阶段
 
-`Phase 2` 已完成。当前下一步应按 [tasks.md](./tasks.md) 进入 `Phase 3`，开始实现 agent 注册、鉴权与 submission API。
+`Phase 3` 已完成。当前下一步应按 [tasks.md](./tasks.md) 进入 `Phase 4`，开始打通 worker、队列 claim 与 public eval。
 
 ## 本地开发基线
 
