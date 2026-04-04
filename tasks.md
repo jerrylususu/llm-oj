@@ -23,7 +23,9 @@
 
 - 后端主语言：`TypeScript`
 - 题目 scorer / evaluator：允许 `Python`
+- Python 依赖管理与命令执行：`uv`
 - 数据库：`Postgres`
+- 数据库运行方式：优先使用 Docker 镜像
 - 运行隔离：`Docker`
 - 文件存储：本地文件系统
 
@@ -31,7 +33,7 @@
 
 - `TypeScript` 代码优先用 `Vitest`
 - API 集成测试建议使用 `Supertest`
-- scorer / evaluator 示例优先用 `pytest`
+- scorer / evaluator 示例优先用 `uv run pytest`
 - 端到端测试优先用脚本方式跑最小闭环，不急着引入重型 E2E 框架
 
 ### 所有阶段通用门禁
@@ -58,6 +60,14 @@ npm test
 - 当前阶段代码可以在本地被实际启动或执行
 
 建议把这四项结果也记录进 showboat，而不是只记录某一个测试命令。
+
+### Git 提交约定
+
+每个阶段完成后，除了通过该阶段门禁外，还必须：
+
+- 自己执行一次 git 提交
+- 提交信息明确标注阶段，例如 `feat: finish phase 1 skeleton`
+- 提交前确认 `progress.md`、必要的 `experience.md` 和对应 showboat 证明已更新
 
 ### Showboat 约定
 
@@ -140,18 +150,18 @@ uvx showboat verify proofs/phase-0-docs.showboat.md
 
 ### 阶段状态
 
-- `未开始`
+- `已完成`
 
 ### 具体任务
 
-- [ ] 初始化 `TypeScript` 项目
-- [ ] 建立 `api` 与 `worker` 基础目录
-- [ ] 配置 lint、format、test 脚本
-- [ ] 接入 `Postgres` 连接与迁移工具
-- [ ] 建立基础配置加载模块
-- [ ] 建立基础日志模块
-- [ ] 建立健康检查接口
-- [ ] 搭建最小 Docker Compose 开发环境
+- [x] 初始化 `TypeScript` 项目
+- [x] 建立 `api` 与 `worker` 基础目录
+- [x] 配置 lint、format、test 脚本
+- [x] 接入 `Postgres` 连接与迁移工具
+- [x] 建立基础配置加载模块
+- [x] 建立基础日志模块
+- [x] 建立健康检查接口
+- [x] 搭建最小 Docker Compose 开发环境
 
 ### 对应测试
 

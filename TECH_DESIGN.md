@@ -7,7 +7,7 @@
 1. 简单可实现
 2. 依赖少、便于本地部署
 3. 主后端统一用 `TypeScript`
-4. 题目级 scorer / evaluator 可用 `Python`
+4. 题目级 scorer / evaluator 可用 `Python`，并统一通过 `uv` 管理依赖与执行命令
 5. 为未来扩展保留合理边界
 
 ## 2. Chosen Architecture
@@ -21,6 +21,11 @@
 - `postgres`：唯一主数据库
 - `docker runner`：执行 submission 与 scorer
 - `local storage`：本地文件系统保存 artifact、日志与 problem bundle
+
+补充约定：
+
+- Python 相关脚本、测试和 scorer 依赖统一走 `uv`
+- Postgres 本地开发环境通过 Docker 镜像启动
 
 不引入：
 

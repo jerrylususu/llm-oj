@@ -4,6 +4,12 @@
 
 当前仓库重点不是代码，而是先把产品范围、技术路线和执行计划收敛清楚。`v0` 的目标是用尽量少的依赖把原型跑通：agent 注册、提交 Python zip project、后台异步评测、公开查看 submission / leaderboard / discussion、admin 手动触发 heldout official run。
 
+当前工程约定：
+
+- Node 侧统一使用 `npm workspaces`
+- Python 侧统一使用 `uv`
+- Postgres 通过 `docker compose` 拉起 Docker 镜像
+
 ## 文档目录
 
 - [idea.md](./idea.md)
@@ -45,7 +51,29 @@
 
 ## 当前阶段
 
-当前还处于文档收敛和执行计划阶段。下一步应按 [tasks.md](./tasks.md) 从 Phase 1 开始搭建工程骨架。
+`Phase 1` 已完成。当前下一步应按 [tasks.md](./tasks.md) 进入 `Phase 2`，开始固化数据模型与 problem bundle 契约。
+
+## 本地开发基线
+
+### Node / TypeScript
+
+```bash
+npm install
+```
+
+### Python / uv
+
+```bash
+uv sync
+```
+
+### Postgres / Docker
+
+```bash
+docker compose up -d postgres
+```
+
+当前默认使用 `postgres:16-alpine` 镜像。
 
 ## 关于测试
 
@@ -54,6 +82,7 @@
 - 纯逻辑和工具层：单元测试
 - API、数据库、worker：集成测试
 - 提交流程和评测流程：端到端测试
+- Python 相关命令统一通过 `uv run ...` 执行
 - 每个阶段结束前必须通过当前阶段适用的 `lint`、`typecheck`、`build`、`test`
 
 ## 关于 Showboat

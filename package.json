@@ -1,0 +1,43 @@
+{
+  "name": "llm-oj",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": "24.3.0",
+    "npm": ">=11.4.2"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "rm -rf apps/*/dist packages/*/dist coverage",
+    "dev:api": "tsx apps/api/src/server.ts",
+    "dev:worker": "tsx apps/worker/src/main.ts",
+    "infra:up": "docker compose up -d postgres",
+    "infra:down": "docker compose down",
+    "infra:logs": "docker compose logs -f postgres",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "migrate": "tsx packages/db/src/cli.ts",
+    "test": "vitest run --config vitest.unit.config.ts",
+    "test:integration": "npm run build && vitest run --config vitest.integration.config.ts",
+    "typecheck": "tsc -b --pretty false"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.25.1",
+    "@types/node": "^24.3.0",
+    "@types/pg": "^8.15.5",
+    "@types/supertest": "^6.0.3",
+    "eslint": "^9.25.1",
+    "eslint-config-prettier": "^10.1.2",
+    "prettier": "^3.5.3",
+    "supertest": "^7.1.1",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.30.1",
+    "vitest": "^3.1.1"
+  }
+}

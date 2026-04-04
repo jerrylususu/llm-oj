@@ -1,0 +1,11 @@
+{
+  "name": "@llm-oj/worker",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
+  "dependencies": {
+    "@llm-oj/db": "*",
+    "@llm-oj/shared": "*"
+  }
+}
