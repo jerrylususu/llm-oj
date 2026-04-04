@@ -87,15 +87,19 @@ uvx showboat verify <proof-file>
 
 把项目从“概念文档”推进到“可以开始写代码”的状态。
 
+### 阶段状态
+
+- `已完成`
+
 ### 具体任务
 
-- 建立基础仓库结构
-- 统一包管理、Node 版本、Python 版本约定
-- 增加 `README.md`
-- 补齐 `tasks.md`
-- 明确文档索引与推荐阅读顺序
-- 定义 `progress.md` 更新约定
-- 建立 `proofs/` 目录和首份 showboat 记录
+- [x] 建立基础仓库结构
+- [x] 统一包管理、Node 版本、Python 版本约定
+- [x] 增加 `README.md`
+- [x] 补齐 `tasks.md`
+- [x] 明确文档索引与推荐阅读顺序
+- [x] 定义 `progress.md` 更新约定
+- [x] 建立 `proofs/` 目录和首份 showboat 记录
 
 ### 对应测试
 
@@ -134,16 +138,20 @@ uvx showboat verify proofs/phase-0-docs.showboat.md
 
 搭好最小可开发骨架，但先不接入真实评测。
 
+### 阶段状态
+
+- `未开始`
+
 ### 具体任务
 
-- 初始化 `TypeScript` 项目
-- 建立 `api` 与 `worker` 基础目录
-- 配置 lint、format、test 脚本
-- 接入 `Postgres` 连接与迁移工具
-- 建立基础配置加载模块
-- 建立基础日志模块
-- 建立健康检查接口
-- 搭建最小 Docker Compose 开发环境
+- [ ] 初始化 `TypeScript` 项目
+- [ ] 建立 `api` 与 `worker` 基础目录
+- [ ] 配置 lint、format、test 脚本
+- [ ] 接入 `Postgres` 连接与迁移工具
+- [ ] 建立基础配置加载模块
+- [ ] 建立基础日志模块
+- [ ] 建立健康检查接口
+- [ ] 搭建最小 Docker Compose 开发环境
 
 ### 对应测试
 
@@ -180,9 +188,13 @@ npm run test:integration
 
 把最核心的数据结构和 problem/scorer 契约先钉死。
 
+### 阶段状态
+
+- `未开始`
+
 ### 具体任务
 
-- 建立数据表：
+- [ ] 建立数据表：
   - `agents`
   - `agent_tokens`
   - `problems`
@@ -193,11 +205,11 @@ npm run test:integration
   - `leaderboard_entries`
   - `discussion_threads`
   - `discussion_replies`
-- 定义 `problem bundle` 目录规范
-- 定义 `spec.json` 格式
-- 定义 scorer 输出 JSON 协议
-- 提供一个最小示例题目
-- 提供一个最小示例 scorer
+- [ ] 定义 `problem bundle` 目录规范
+- [ ] 定义 `spec.json` 格式
+- [ ] 定义 scorer 输出 JSON 协议
+- [ ] 提供一个最小示例题目
+- [ ] 提供一个最小示例 scorer
 
 ### 对应测试
 
@@ -233,15 +245,19 @@ pytest examples/problems/<sample>/tests
 
 打通 agent 写入入口，但先不接完整执行链路。
 
+### 阶段状态
+
+- `未开始`
+
 ### 具体任务
 
-- 实现 agent 注册接口
-- 生成并返回 token
-- 实现 bearer token 鉴权中间件
-- 实现 problem 列表与详情接口
-- 实现 submission 创建接口
-- 实现 zip artifact 落盘
-- 实现 submission 状态查询接口
+- [ ] 实现 agent 注册接口
+- [ ] 生成并返回 token
+- [ ] 实现 bearer token 鉴权中间件
+- [ ] 实现 problem 列表与详情接口
+- [ ] 实现 submission 创建接口
+- [ ] 实现 zip artifact 落盘
+- [ ] 实现 submission 状态查询接口
 
 ### 对应测试
 
@@ -282,16 +298,20 @@ npm run test:integration
 
 让 submission 真正进入队列，并完成 shown + hidden 评测。
 
+### 阶段状态
+
+- `未开始`
+
 ### 具体任务
 
-- 实现 `evaluation_jobs` claim 逻辑
-- 实现 worker 主循环
-- 实现 Docker runner 调用
-- 解包 submission 并挂载 problem bundle
-- 执行 scorer
-- 解析 scorer 输出
-- 写回 evaluation 结果
-- 更新 submission 状态
+- [ ] 实现 `evaluation_jobs` claim 逻辑
+- [ ] 实现 worker 主循环
+- [ ] 实现 Docker runner 调用
+- [ ] 解包 submission 并挂载 problem bundle
+- [ ] 执行 scorer
+- [ ] 解析 scorer 输出
+- [ ] 写回 evaluation 结果
+- [ ] 更新 submission 状态
 
 ### 对应测试
 
@@ -332,15 +352,19 @@ npm run test:e2e:public-eval
 
 把“评测结果可观察”这件事做完整。
 
+### 阶段状态
+
+- `未开始`
+
 ### 具体任务
 
-- 实现 submission 评测完成后公开
-- 实现 per-problem leaderboard 更新逻辑
-- 实现 submission detail 页面
-- 实现 problem detail 页面
-- 实现 leaderboard 页面
-- 实现 discussion 页面
-- 实现最小题目级 thread 和 reply API
+- [ ] 实现 submission 评测完成后公开
+- [ ] 实现 per-problem leaderboard 更新逻辑
+- [ ] 实现 submission detail 页面
+- [ ] 实现 problem detail 页面
+- [ ] 实现 leaderboard 页面
+- [ ] 实现 discussion 页面
+- [ ] 实现最小题目级 thread 和 reply API
 
 ### 对应测试
 
@@ -382,15 +406,19 @@ npm run test:e2e:leaderboard
 
 把题目管理和官方评测补齐，形成真正的产品闭环。
 
+### 阶段状态
+
+- `未开始`
+
 ### 具体任务
 
-- 实现 admin basic auth
-- 实现创建 problem / problem version API
-- 实现 admin 极简上传页
-- 实现 rejudge 接口
-- 实现 official heldout run
-- 展示 official score
-- 实现隐藏 submission、禁用 agent 的最小能力
+- [ ] 实现 admin basic auth
+- [ ] 实现创建 problem / problem version API
+- [ ] 实现 admin 极简上传页
+- [ ] 实现 rejudge 接口
+- [ ] 实现 official heldout run
+- [ ] 展示 official score
+- [ ] 实现隐藏 submission、禁用 agent 的最小能力
 
 ### 对应测试
 
@@ -435,6 +463,10 @@ npm run test:e2e:official-run
 
 在核心契约稳定后，为未来参与平台的 LLM 补一层明确的操作指引。
 
+### 阶段状态
+
+- `未开始`
+
 ### 为什么不提前做
 
 - 现在最容易变的是 submission 契约、problem bundle 契约和 API 细节
@@ -443,12 +475,12 @@ npm run test:e2e:official-run
 
 ### 具体任务
 
-- 设计 repo 内的 LLM skill 文档
-- 明确 agent 提交 solution 的推荐流程
-- 明确如何阅读 problem detail、leaderboard、submission、discussion
-- 明确提交前自测流程
-- 明确如何记录 reasoning、parent_submission_id、credit_text
-- 明确如何使用 `uvx showboat` 记录真实完成情况
+- [ ] 设计 repo 内的 LLM skill 文档
+- [ ] 明确 agent 提交 solution 的推荐流程
+- [ ] 明确如何阅读 problem detail、leaderboard、submission、discussion
+- [ ] 明确提交前自测流程
+- [ ] 明确如何记录 reasoning、parent_submission_id、credit_text
+- [ ] 明确如何使用 `uvx showboat` 记录真实完成情况
 
 ### 对应测试
 
@@ -480,14 +512,18 @@ uvx showboat verify proofs/phase-7-skill.showboat.md
 
 把仓库从“内部原型”整理成“别人可读可跑”的状态。
 
+### 阶段状态
+
+- `未开始`
+
 ### 具体任务
 
-- 清理 README
-- 增加快速开始
-- 增加常见问题
-- 补一个 sample problem 和 sample submission
-- 补一份 end-to-end demo showboat
-- 梳理已知限制和后续 roadmap
+- [ ] 清理 README
+- [ ] 增加快速开始
+- [ ] 增加常见问题
+- [ ] 补一个 sample problem 和 sample submission
+- [ ] 补一份 end-to-end demo showboat
+- [ ] 梳理已知限制和后续 roadmap
 
 ### 对应测试
 
