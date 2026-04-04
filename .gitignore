@@ -4,5 +4,7 @@ coverage
 .DS_Store
 .env
 .venv
+__pycache__/
+*.py[cod]
 storage/*
 !storage/.gitkeep

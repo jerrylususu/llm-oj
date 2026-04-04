@@ -30,3 +30,14 @@
 
 如何避免：
 后续新增示例、脚本或 fixture 测试时，不要凭感觉写相对层级；应先用当前文件的真实路径数一遍父目录层级，或者直接把仓库根目录收敛到统一辅助函数，避免出现这种 `examples/examples` 级别的路径拼接错误。
+
+## 2026-04-05 pytest 运行后把 __pycache__ 带进提交
+
+问题：
+运行 `uv run pytest` 后，`examples/problems/sample-sum/tests/__pycache__/` 被生成；仓库 `.gitignore` 里此前没有忽略 Python 缓存文件，导致它被错误纳入了阶段提交。
+
+如何解决：
+补充 `.gitignore` 中对 `__pycache__/` 和 `*.py[cod]` 的忽略规则，并把已经跟踪的缓存文件从 Git 索引中移除。
+
+如何避免：
+只要仓库里开始引入 Python 脚本或测试，就应第一时间补齐 Python 的基础忽略规则；不要等到首次跑测试后再去清理提交污染。

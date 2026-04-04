@@ -17,3 +17,4 @@
 2026-04-05T01:48:57+08:00 已更新 Phase 2 任务状态与 README 当前阶段，并开始生成 proofs/phase-2-bundle-contract.showboat.md 验收记录。
 2026-04-05T02:03:17+08:00 已在中断后恢复现场，确认 Phase 2 仅剩 showboat 补录与 verify，随后继续推进 Phase 3。
 2026-04-05T02:06:49+08:00 已完成 Phase 2 showboat 补录与 verify，当前开始切入 Phase 3 的 agent 注册、鉴权与 submission API 实现。
+2026-04-05T02:08:06+08:00 已修复 pytest 生成 __pycache__ 被误纳入 Git 的问题：补充 Python 忽略规则并移除缓存文件跟踪。
