@@ -53,7 +53,7 @@
 
 ## 当前阶段
 
-`Phase 3` 已完成。当前下一步应按 [tasks.md](./tasks.md) 进入 `Phase 4`，开始打通 worker、队列 claim 与 public eval。
+`Phase 4` 已完成。当前下一步应按 [tasks.md](./tasks.md) 进入 `Phase 5`，开始补齐 leaderboard、submission 可见性和只读网页。
 
 ## 本地开发基线
 

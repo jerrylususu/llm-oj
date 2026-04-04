@@ -6,6 +6,9 @@ export const envSchema = z.object({
   API_PORT: z.coerce.number().int().positive().default(3000),
   API_HOST: z.string().min(1).default('0.0.0.0'),
   WORKER_POLL_INTERVAL_MS: z.coerce.number().int().positive().default(3000),
+  RUNNER_MODE: z.enum(['docker', 'local']).default('docker'),
+  RUNNER_PYTHON_IMAGE: z.string().min(1).default('python:3.12-alpine'),
+  RUNNER_TIMEOUT_SEC: z.coerce.number().positive().default(30),
   DATABASE_URL: z.string().url(),
   STORAGE_ROOT: z.string().min(1).default('storage'),
   PROBLEMS_ROOT: z.string().min(1).default('examples/problems')

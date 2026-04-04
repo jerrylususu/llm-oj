@@ -310,18 +310,18 @@ npm run test:integration
 
 ### 阶段状态
 
-- `未开始`
+- `已完成`
 
 ### 具体任务
 
-- [ ] 实现 `evaluation_jobs` claim 逻辑
-- [ ] 实现 worker 主循环
-- [ ] 实现 Docker runner 调用
-- [ ] 解包 submission 并挂载 problem bundle
-- [ ] 执行 scorer
-- [ ] 解析 scorer 输出
-- [ ] 写回 evaluation 结果
-- [ ] 更新 submission 状态
+- [x] 实现 `evaluation_jobs` claim 逻辑
+- [x] 实现 worker 主循环
+- [x] 实现 Docker runner 调用
+- [x] 解包 submission 并挂载 problem bundle
+- [x] 执行 scorer
+- [x] 解析 scorer 输出
+- [x] 写回 evaluation 结果
+- [x] 更新 submission 状态
 
 ### 对应测试
 

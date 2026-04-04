@@ -1,7 +1,11 @@
 import type { Pool } from 'pg';
 
 export interface HeartbeatPayload {
-  readonly status: 'starting' | 'idle';
+  readonly status: 'starting' | 'idle' | 'running';
+  readonly jobId?: string;
+  readonly submissionId?: string;
+  readonly lastCompletedJobId?: string;
+  readonly lastFailedJobId?: string;
 }
 
 export async function upsertServiceHeartbeat(

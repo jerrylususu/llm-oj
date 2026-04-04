@@ -309,6 +309,20 @@ export function createApiApp(options: CreateApiAppOptions) {
               status: submission.evaluationJobStatus
             }
           : null,
+        evaluation: submission.evaluation
+          ? {
+              id: submission.evaluation.id,
+              status: submission.evaluation.status,
+              eval_type: submission.evaluation.evalType,
+              primary_score: submission.evaluation.primaryScore,
+              shown_results: submission.evaluation.shownResults,
+              hidden_summary: submission.evaluation.hiddenSummary,
+              official_summary: submission.evaluation.officialSummary,
+              log_path: submission.evaluation.logPath,
+              started_at: submission.evaluation.startedAt,
+              finished_at: submission.evaluation.finishedAt
+            }
+          : null,
         created_at: submission.createdAt,
         updated_at: submission.updatedAt
       });

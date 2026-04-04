@@ -75,6 +75,53 @@ export interface SubmissionRecord {
   readonly updatedAt: string;
   readonly evaluationJobId: string | null;
   readonly evaluationJobStatus: string | null;
+  readonly evaluation: {
+    readonly id: string;
+    readonly status: string;
+    readonly evalType: string;
+    readonly primaryScore: number | null;
+    readonly shownResults: unknown;
+    readonly hiddenSummary: unknown;
+    readonly officialSummary: unknown;
+    readonly logPath: string | null;
+    readonly startedAt: string | null;
+    readonly finishedAt: string | null;
+  } | null;
+}
+
+export interface EvaluationJobPayload {
+  readonly artifact_path: string;
+  readonly bundle_path: string;
+  readonly problem_id: string;
+  readonly problem_version_id: string;
+}
+
+export interface EvaluationJobRecord {
+  readonly id: string;
+  readonly submissionId: string;
+  readonly problemId: string;
+  readonly problemVersionId: string;
+  readonly evalType: 'public' | 'official';
+  readonly status: string;
+  readonly attemptCount: number;
+  readonly payload: EvaluationJobPayload;
+}
+
+export interface EvaluationResultInput {
+  readonly evaluationId: string;
+  readonly submissionId: string;
+  readonly jobId: string;
+  readonly evalType: 'public' | 'official';
+}
+
+export interface PersistedEvaluationResult extends EvaluationResultInput {
+  readonly status: 'completed' | 'failed';
+  readonly primaryScore: number | null;
+  readonly shownResults: unknown;
+  readonly hiddenSummary: unknown;
+  readonly officialSummary: unknown;
+  readonly logPath: string | null;
+  readonly lastError: string | null;
 }
 
 function mapProblemVersionRow(row: {
@@ -498,7 +545,8 @@ export async function createSubmissionWithJob(
       createdAt: row.created_at,
       updatedAt: row.updated_at,
       evaluationJobId: input.jobId,
-      evaluationJobStatus: 'queued'
+      evaluationJobStatus: 'queued',
+      evaluation: null
     };
   } catch (error) {
     await client.query('ROLLBACK');
@@ -528,6 +576,16 @@ export async function getSubmissionById(
     updated_at: string;
     evaluation_job_id: string | null;
     evaluation_job_status: string | null;
+    evaluation_id: string | null;
+    evaluation_status: string | null;
+    evaluation_eval_type: string | null;
+    evaluation_primary_score: number | null;
+    shown_results_json: unknown;
+    hidden_summary_json: unknown;
+    official_summary_json: unknown;
+    evaluation_log_path: string | null;
+    evaluation_started_at: string | null;
+    evaluation_finished_at: string | null;
   }>(
     `
       SELECT
@@ -545,9 +603,36 @@ export async function getSubmissionById(
         s.created_at,
         s.updated_at,
         j.id AS evaluation_job_id,
-        j.status AS evaluation_job_status
+        j.status AS evaluation_job_status,
+        e.id AS evaluation_id,
+        e.status AS evaluation_status,
+        e.eval_type AS evaluation_eval_type,
+        e.primary_score AS evaluation_primary_score,
+        e.shown_results_json,
+        e.hidden_summary_json,
+        e.official_summary_json,
+        e.log_path AS evaluation_log_path,
+        e.started_at AS evaluation_started_at,
+        e.finished_at AS evaluation_finished_at
       FROM submissions s
       LEFT JOIN evaluation_jobs j ON j.submission_id = s.id
+      LEFT JOIN LATERAL (
+        SELECT
+          id,
+          status,
+          eval_type,
+          primary_score,
+          shown_results_json,
+          hidden_summary_json,
+          official_summary_json,
+          log_path,
+          started_at,
+          finished_at
+        FROM evaluations
+        WHERE submission_id = s.id
+        ORDER BY created_at DESC
+        LIMIT 1
+      ) e ON TRUE
       WHERE s.id = $1
       ORDER BY j.created_at DESC NULLS LAST
       LIMIT 1
@@ -575,6 +660,163 @@ export async function getSubmissionById(
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     evaluationJobId: row.evaluation_job_id,
-    evaluationJobStatus: row.evaluation_job_status
+    evaluationJobStatus: row.evaluation_job_status,
+    evaluation: row.evaluation_id
+      ? {
+          id: row.evaluation_id,
+          status: row.evaluation_status ?? 'unknown',
+          evalType: row.evaluation_eval_type ?? 'public',
+          primaryScore: row.evaluation_primary_score,
+          shownResults: row.shown_results_json,
+          hiddenSummary: row.hidden_summary_json,
+          officialSummary: row.official_summary_json,
+          logPath: row.evaluation_log_path,
+          startedAt: row.evaluation_started_at,
+          finishedAt: row.evaluation_finished_at
+        }
+      : null
   };
+}
+
+export async function claimNextEvaluationJob(
+  pool: Pool,
+  workerId: string
+): Promise<EvaluationJobRecord | null> {
+  const result = await pool.query<{
+    id: string;
+    submission_id: string;
+    problem_id: string;
+    problem_version_id: string;
+    eval_type: 'public' | 'official';
+    status: string;
+    attempt_count: number;
+    payload_json: EvaluationJobPayload;
+  }>(
+    `
+      WITH next_job AS (
+        SELECT id
+        FROM evaluation_jobs
+        WHERE status = 'queued'
+          AND scheduled_at <= NOW()
+        ORDER BY priority DESC, scheduled_at ASC
+        FOR UPDATE SKIP LOCKED
+        LIMIT 1
+      )
+      UPDATE evaluation_jobs j
+      SET status = 'running',
+          claimed_at = NOW(),
+          worker_id = $1,
+          attempt_count = j.attempt_count + 1
+      FROM next_job
+      WHERE j.id = next_job.id
+      RETURNING
+        j.id,
+        j.submission_id,
+        j.problem_id,
+        j.problem_version_id,
+        j.eval_type,
+        j.status,
+        j.attempt_count,
+        j.payload_json
+    `,
+    [workerId]
+  );
+
+  const row = result.rows[0];
+  if (!row) {
+    return null;
+  }
+
+  await pool.query(`UPDATE submissions SET status = 'running', updated_at = NOW() WHERE id = $1`, [
+    row.submission_id
+  ]);
+
+  return {
+    id: row.id,
+    submissionId: row.submission_id,
+    problemId: row.problem_id,
+    problemVersionId: row.problem_version_id,
+    evalType: row.eval_type,
+    status: row.status,
+    attemptCount: row.attempt_count,
+    payload: row.payload_json
+  };
+}
+
+export async function markEvaluationStarted(
+  pool: Pool,
+  input: EvaluationResultInput
+): Promise<void> {
+  await pool.query(
+    `
+      INSERT INTO evaluations (
+        id,
+        submission_id,
+        job_id,
+        eval_type,
+        status,
+        started_at
+      )
+      VALUES ($1, $2, $3, $4, 'running', NOW())
+      ON CONFLICT (job_id) DO UPDATE
+      SET status = 'running',
+          started_at = NOW(),
+          finished_at = NULL
+    `,
+    [input.evaluationId, input.submissionId, input.jobId, input.evalType]
+  );
+}
+
+export async function markEvaluationFinished(
+  pool: Pool,
+  input: PersistedEvaluationResult
+): Promise<void> {
+  await pool.query(
+    `
+      UPDATE evaluations
+      SET status = $2,
+          primary_score = $3,
+          shown_results_json = $4::jsonb,
+          hidden_summary_json = $5::jsonb,
+          official_summary_json = $6::jsonb,
+          log_path = $7,
+          finished_at = NOW()
+      WHERE job_id = $1
+    `,
+    [
+      input.jobId,
+      input.status,
+      input.primaryScore,
+      JSON.stringify(input.shownResults),
+      JSON.stringify(input.hiddenSummary),
+      JSON.stringify(input.officialSummary),
+      input.logPath
+    ]
+  );
+
+  await pool.query(
+    `
+      UPDATE evaluation_jobs
+      SET status = $2,
+          finished_at = NOW(),
+          last_error = $3
+      WHERE id = $1
+    `,
+    [input.jobId, input.status === 'completed' ? 'completed' : 'failed', input.lastError]
+  );
+
+  await pool.query(
+    `
+      UPDATE submissions
+      SET status = $2,
+          visible_after_eval = $3,
+          updated_at = NOW()
+      WHERE id = $1
+    `,
+    [
+      input.submissionId,
+      input.status === 'completed' ? 'completed' : 'failed',
+      input.status === 'completed'
+    ]
+  );
 }

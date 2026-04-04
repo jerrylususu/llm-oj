@@ -74,3 +74,14 @@
 
 如何避免：
 后续凡是要写进 showboat 的脚本输出，都要先判断是否包含随机值、时间戳、临时路径或顺序不稳定的数据；如果有，就先在脚本层做归一化，而不是等 verify 失败后再返工。
+
+## 2026-04-05 跨 workspace 直接引源码会把编译产物打到 source 目录
+
+问题：
+在 `tests/` 和 `scripts/` 里直接通过相对路径导入 `../apps/api/src/app`、`../apps/worker/src/worker` 之后，`tsc -b` 会在 `apps/*/src` 下额外产出 `.js`、`.d.ts` 和 `.map` 文件，进而污染 lint 和工作区。
+
+如何解决：
+既然 `apps/api` 和 `apps/worker` 已经是 workspace 包，就统一改为 `@llm-oj/api`、`@llm-oj/worker` 形式导入，并把跨应用的集成测试放进独立 `tests/` 工程引用这些包，而不是反向拉源码文件。
+
+如何避免：
+monorepo 里只要某个目录已经是独立 package/project，就优先走包边界而不是源码相对路径；否则 TypeScript 的项目引用、构建输出和 lint 边界都会被绕开，问题通常直到构建产物污染源码后才暴露。

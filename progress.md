@@ -23,3 +23,7 @@
 2026-04-05T02:18:58+08:00 已开始生成 Phase 3 showboat，并补充 scripts/phase3-demo.ts 用于输出注册、提交与数据库状态的可复验示例。
 2026-04-05T02:27:23+08:00 已将 Phase 3 showboat demo 输出正规化为稳定字段，并重建 proofs/phase-3-agent-submission.showboat.md 以避免随机值导致 verify 失败。
 2026-04-05T02:30:48+08:00 已完成 Phase 3 showboat verify，并确认当前待提交改动仅包含 Phase 3 API、demo 脚本与相关工程配置。
+2026-04-05T02:35:57+08:00 已开始推进 Phase 4：新增 job claim、runner、本地 public eval 回写逻辑，以及 worker 集成测试与 e2e 脚本骨架。
+2026-04-05T02:47:10+08:00 已完成 Phase 4 全量验证：lint、typecheck、unit、integration、test:e2e:public-eval 与 uv pytest 全部通过，并覆盖 worker 成功与失败回写路径。
+2026-04-05T02:49:12+08:00 已开始生成 Phase 4 showboat，准备记录 public eval 成功链路、失败回写示例及阶段验证命令。
+2026-04-05T02:53:20+08:00 已完成 Phase 4 showboat verify，当前待提交改动集中于 worker 公共评测链路、e2e 脚本与相关工程配置。

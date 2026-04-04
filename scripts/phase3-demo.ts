@@ -3,6 +3,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
+import { createApiApp } from '@llm-oj/api';
 import {
   createDatabasePool,
   defaultMigrationsDir,
@@ -10,8 +11,6 @@ import {
   runMigrations
 } from '@llm-oj/db';
 import { createLogger, createServiceConfig } from '@llm-oj/shared';
-
-import { createApiApp } from '../apps/api/src/app';
 
 const databaseUrl =
   process.env.TEST_DATABASE_URL ??
