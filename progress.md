@@ -11,3 +11,9 @@
 2026-04-05T01:12:55+08:00 已确认 postgres:16-alpine 可正常拉取并启动，当前 Postgres 容器已处于 Running 状态。
 2026-04-05T01:27:59+08:00 已完成 Phase 1 全量验证并通过 proofs/phase-1-skeleton.showboat.md 的 verify。
 2026-04-05T01:28:51+08:00 已按阶段约定完成 git 提交，提交哈希为 1b6cfb8。
+2026-04-05T01:39:21+08:00 已接手继续推进后续 phase，并确认当前工作断点位于 Phase 2 数据模型与 problem bundle 契约。
+2026-04-05T01:45:21+08:00 已实现 Phase 2 首版：新增核心数据表迁移、problem bundle 契约、示例题 sample-sum 与 Python scorer 测试骨架。
+2026-04-05T01:47:49+08:00 已修复 sample-sum Python 合约测试的路径与缩进问题，并确认 lint、typecheck、unit、integration、uv pytest 全部通过。
+2026-04-05T01:48:57+08:00 已更新 Phase 2 任务状态与 README 当前阶段，并开始生成 proofs/phase-2-bundle-contract.showboat.md 验收记录。
+2026-04-05T02:03:17+08:00 已在中断后恢复现场，确认 Phase 2 仅剩 showboat 补录与 verify，随后继续推进 Phase 3。
+2026-04-05T02:06:49+08:00 已完成 Phase 2 showboat 补录与 verify，当前开始切入 Phase 3 的 agent 注册、鉴权与 submission API 实现。

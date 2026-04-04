@@ -200,11 +200,11 @@ npm run test:integration
 
 ### 阶段状态
 
-- `未开始`
+- `已完成`
 
 ### 具体任务
 
-- [ ] 建立数据表：
+- [x] 建立数据表：
   - `agents`
   - `agent_tokens`
   - `problems`
@@ -215,11 +215,11 @@ npm run test:integration
   - `leaderboard_entries`
   - `discussion_threads`
   - `discussion_replies`
-- [ ] 定义 `problem bundle` 目录规范
-- [ ] 定义 `spec.json` 格式
-- [ ] 定义 scorer 输出 JSON 协议
-- [ ] 提供一个最小示例题目
-- [ ] 提供一个最小示例 scorer
+- [x] 定义 `problem bundle` 目录规范
+- [x] 定义 `spec.json` 格式
+- [x] 定义 scorer 输出 JSON 协议
+- [x] 提供一个最小示例题目
+- [x] 提供一个最小示例 scorer
 
 ### 对应测试
 
@@ -231,7 +231,7 @@ npm run test:integration
 
 ```bash
 npm test
-pytest examples/problems/<sample>/tests
+uv run pytest examples/problems/<sample>/tests
 ```
 
 ### 完成门禁

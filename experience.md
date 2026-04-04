@@ -19,3 +19,14 @@
 
 如何避免：
 后续只要工作区包在测试或运行时既可能从源码执行，也可能从构建产物执行，就不要把资源路径写死成单一路径，应在实现里显式考虑 `src` 和 `dist` 两种落点。
+
+## 2026-04-05 Python 示例测试错误计算仓库根目录
+
+问题：
+`examples/problems/sample-sum/tests/test_scorer.py` 通过 `Path(__file__).resolve().parents[3]` 计算仓库根目录，实际只回退到了 `examples/`，导致 scorer 路径被拼成 `examples/examples/...` 并直接找不到文件。
+
+如何解决：
+把根目录回退层级修正为 `parents[4]`，同时顺手修正 scorer 中 `for case in cases` 代码块的缩进，避免后续路径修好后再触发语法层错误。
+
+如何避免：
+后续新增示例、脚本或 fixture 测试时，不要凭感觉写相对层级；应先用当前文件的真实路径数一遍父目录层级，或者直接把仓库根目录收敛到统一辅助函数，避免出现这种 `examples/examples` 级别的路径拼接错误。

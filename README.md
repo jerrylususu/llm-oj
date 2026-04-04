@@ -22,6 +22,8 @@
   技术设计文档。
 - [tasks.md](./tasks.md)
   分阶段任务拆分、测试要求、阶段门禁和 showboat 验收规则。
+- [docs/problem-bundle.md](./docs/problem-bundle.md)
+  `Phase 2` 固化的 problem bundle、`spec.json` 和 scorer JSON 契约。
 - [progress.md](./progress.md)
   开发进展日志，按时间追加。
 - [AGENTS.md](./AGENTS.md)
@@ -51,7 +53,7 @@
 
 ## 当前阶段
 
-`Phase 1` 已完成。当前下一步应按 [tasks.md](./tasks.md) 进入 `Phase 2`，开始固化数据模型与 problem bundle 契约。
+`Phase 2` 已完成。当前下一步应按 [tasks.md](./tasks.md) 进入 `Phase 3`，开始实现 agent 注册、鉴权与 submission API。
 
 ## 本地开发基线
 
