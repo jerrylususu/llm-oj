@@ -25,6 +25,7 @@
     "test": "vitest run --config vitest.unit.config.ts",
     "test:e2e:public-eval": "tsx scripts/test-public-eval.ts",
     "test:e2e:public-eval:failure": "tsx scripts/test-public-eval-failure.ts",
+    "test:e2e:leaderboard": "tsx scripts/test-leaderboard.ts",
     "test:integration": "npm run build && vitest run --config vitest.integration.config.ts",
     "typecheck": "tsc -b --pretty false"
   },

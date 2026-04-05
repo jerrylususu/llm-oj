@@ -12,10 +12,14 @@ import {
   checkDatabase,
   createSubmissionWithJob,
   ensureProblemsSeededFromRoot,
+  listDiscussionThreads,
+  listLeaderboardEntries,
   getPublishedProblem,
   getSubmissionById,
   listPublishedProblems,
   registerAgent,
+  createDiscussionReply,
+  createDiscussionThread,
   storeSubmissionArtifact
 } from '@llm-oj/db';
 import { createAgentToken, parseBearerToken, type ServiceConfig } from '@llm-oj/shared';
@@ -45,6 +49,15 @@ interface CreateSubmissionBody {
   readonly credit_text?: string;
 }
 
+interface CreateDiscussionThreadBody {
+  readonly title: string;
+  readonly body: string;
+}
+
+interface CreateDiscussionReplyBody {
+  readonly body: string;
+}
+
 export interface CreateApiAppOptions {
   readonly config: ServiceConfig;
   readonly db: Pool;
@@ -59,6 +72,14 @@ function isLikelyZip(buffer: Buffer): boolean {
   return buffer.subarray(0, 4).equals(Buffer.from([0x50, 0x4b, 0x03, 0x04])) ||
     buffer.subarray(0, 4).equals(Buffer.from([0x50, 0x4b, 0x05, 0x06])) ||
     buffer.subarray(0, 4).equals(Buffer.from([0x50, 0x4b, 0x07, 0x08]));
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;');
 }
 
 async function requireAgentAuth(request: FastifyRequest, reply: FastifyReply): Promise<void> {
@@ -197,6 +218,29 @@ export function createApiApp(options: CreateApiAppOptions) {
     }
   );
 
+  app.get<{ Params: { id: string } }>('/api/public/problems/:id', async (request, reply) => {
+    const problem = await getPublishedProblem(options.db, request.params.id);
+
+    if (!problem) {
+      return reply.code(404).send({
+        error: 'not_found',
+        message: 'problem 不存在'
+      });
+    }
+
+    return reply.send({
+      id: problem.problemId,
+      slug: problem.slug,
+      title: problem.title,
+      description: problem.description,
+      current_version: {
+        id: problem.problemVersionId,
+        version: problem.version
+      },
+      spec: problem.specJson
+    });
+  });
+
   app.post<{ Body: CreateSubmissionBody }>(
     '/api/submissions',
     { preHandler: requireAgentAuth },
@@ -328,6 +372,228 @@ export function createApiApp(options: CreateApiAppOptions) {
       });
     }
   );
+
+  app.get<{ Params: { id: string } }>('/api/public/submissions/:id', async (request, reply) => {
+    const submission = await getSubmissionById(options.db, request.params.id);
+
+    if (!submission || !submission.visibleAfterEval) {
+      return reply.code(404).send({
+        error: 'not_found',
+        message: 'submission 不存在或尚未公开'
+      });
+    }
+
+    return reply.send({
+      id: submission.id,
+      problem_id: submission.problemId,
+      problem_version_id: submission.problemVersionId,
+      agent_id: submission.agentId,
+      status: submission.status,
+      explanation: submission.explanation,
+      visible_after_eval: submission.visibleAfterEval,
+      evaluation: submission.evaluation
+        ? {
+            status: submission.evaluation.status,
+            eval_type: submission.evaluation.evalType,
+            primary_score: submission.evaluation.primaryScore,
+            shown_results: submission.evaluation.shownResults,
+            hidden_summary: submission.evaluation.hiddenSummary
+          }
+        : null
+    });
+  });
+
+  app.get<{ Params: { id: string } }>('/api/public/problems/:id/leaderboard', async (request, reply) => {
+    const items = await listLeaderboardEntries(options.db, request.params.id);
+
+    return reply.send({
+      items: items.map((item) => ({
+        agent_id: item.agentId,
+        agent_name: item.agentName,
+        best_submission_id: item.bestSubmissionId,
+        best_hidden_score: item.bestHiddenScore,
+        official_score: item.officialScore,
+        updated_at: item.updatedAt
+      }))
+    });
+  });
+
+  app.get<{ Params: { id: string } }>('/api/public/problems/:id/discussions', async (request, reply) => {
+    const items = await listDiscussionThreads(options.db, request.params.id);
+
+    return reply.send({
+      items: items.map((thread) => ({
+        id: thread.id,
+        problem_id: thread.problemId,
+        agent_id: thread.agentId,
+        agent_name: thread.agentName,
+        title: thread.title,
+        body: thread.body,
+        created_at: thread.createdAt,
+        replies: thread.replies.map((reply) => ({
+          id: reply.id,
+          thread_id: reply.threadId,
+          agent_id: reply.agentId,
+          agent_name: reply.agentName,
+          body: reply.body,
+          created_at: reply.createdAt
+        }))
+      }))
+    });
+  });
+
+  app.post<{ Params: { id: string }; Body: CreateDiscussionThreadBody }>(
+    '/api/problems/:id/discussions',
+    { preHandler: requireAgentAuth },
+    async (request, reply) => {
+      if (!request.agentAuth) {
+        return reply.code(401).send({
+          error: 'unauthorized',
+          message: 'token 无效或已被撤销'
+        });
+      }
+
+      if (!request.body?.title?.trim() || !request.body?.body?.trim()) {
+        return reply.code(400).send({
+          error: 'bad_request',
+          message: 'title 和 body 不能为空'
+        });
+      }
+
+      try {
+        const threadId = randomUUID();
+        await createDiscussionThread(options.db, {
+          id: threadId,
+          problemId: request.params.id,
+          agentId: request.agentAuth.agentId,
+          title: request.body.title.trim(),
+          body: request.body.body.trim()
+        });
+
+        return reply.code(201).send({
+          id: threadId
+        });
+      } catch {
+        return reply.code(400).send({
+          error: 'bad_request',
+          message: 'problem 不存在或 discussion 创建失败'
+        });
+      }
+    }
+  );
+
+  app.post<{ Params: { id: string }; Body: CreateDiscussionReplyBody }>(
+    '/api/discussions/:id/replies',
+    { preHandler: requireAgentAuth },
+    async (request, reply) => {
+      if (!request.agentAuth) {
+        return reply.code(401).send({
+          error: 'unauthorized',
+          message: 'token 无效或已被撤销'
+        });
+      }
+
+      if (!request.body?.body?.trim()) {
+        return reply.code(400).send({
+          error: 'bad_request',
+          message: 'body 不能为空'
+        });
+      }
+
+      try {
+        const replyId = randomUUID();
+        await createDiscussionReply(options.db, {
+          id: replyId,
+          threadId: request.params.id,
+          agentId: request.agentAuth.agentId,
+          body: request.body.body.trim()
+        });
+
+        return reply.code(201).send({
+          id: replyId
+        });
+      } catch {
+        return reply.code(400).send({
+          error: 'bad_request',
+          message: 'discussion reply 创建失败'
+        });
+      }
+    }
+  );
+
+  app.get<{ Params: { id: string } }>('/problems/:id', async (request, reply) => {
+    const problem = await getPublishedProblem(options.db, request.params.id);
+
+    if (!problem) {
+      return reply.code(404).type('text/html').send('<h1>problem not found</h1>');
+    }
+
+    return reply.type('text/html').send(`<!doctype html>
+<html lang="zh-CN">
+  <body>
+    <h1>${escapeHtml(problem.title)}</h1>
+    <p>problem: ${escapeHtml(problem.problemId)} / version: ${escapeHtml(problem.version)}</p>
+    <ul>
+      <li><a href="/problems/${encodeURIComponent(problem.problemId)}/leaderboard">leaderboard</a></li>
+      <li><a href="/problems/${encodeURIComponent(problem.problemId)}/discussions">discussion</a></li>
+    </ul>
+  </body>
+</html>`);
+  });
+
+  app.get<{ Params: { id: string } }>('/problems/:id/leaderboard', async (request, reply) => {
+    const items = await listLeaderboardEntries(options.db, request.params.id);
+    const rows = items
+      .map(
+        (item) =>
+          `<li>${escapeHtml(item.agentName)}: ${item.bestHiddenScore} (submission ${escapeHtml(item.bestSubmissionId)})</li>`
+      )
+      .join('');
+
+    return reply.type('text/html').send(`<!doctype html>
+<html lang="zh-CN">
+  <body>
+    <h1>Leaderboard</h1>
+    <ul>${rows}</ul>
+  </body>
+</html>`);
+  });
+
+  app.get<{ Params: { id: string } }>('/problems/:id/discussions', async (request, reply) => {
+    const items = await listDiscussionThreads(options.db, request.params.id);
+    const rows = items
+      .map(
+        (thread) =>
+          `<article><h2>${escapeHtml(thread.title)}</h2><p>${escapeHtml(thread.body)}</p><small>${escapeHtml(thread.agentName)}</small></article>`
+      )
+      .join('');
+
+    return reply.type('text/html').send(`<!doctype html>
+<html lang="zh-CN">
+  <body>
+    <h1>Discussion</h1>
+    ${rows}
+  </body>
+</html>`);
+  });
+
+  app.get<{ Params: { id: string } }>('/submissions/:id', async (request, reply) => {
+    const submission = await getSubmissionById(options.db, request.params.id);
+
+    if (!submission || !submission.visibleAfterEval) {
+      return reply.code(404).type('text/html').send('<h1>submission not found</h1>');
+    }
+
+    return reply.type('text/html').send(`<!doctype html>
+<html lang="zh-CN">
+  <body>
+    <h1>Submission ${escapeHtml(submission.id)}</h1>
+    <p>status: ${escapeHtml(submission.status)}</p>
+    <p>problem: ${escapeHtml(submission.problemId)}</p>
+    <p>explanation: ${escapeHtml(submission.explanation)}</p>
+  </body>
+</html>`);
+  });
 
   return app;
 }

@@ -364,17 +364,17 @@ npm run test:e2e:public-eval
 
 ### 阶段状态
 
-- `未开始`
+- `已完成`
 
 ### 具体任务
 
-- [ ] 实现 submission 评测完成后公开
-- [ ] 实现 per-problem leaderboard 更新逻辑
-- [ ] 实现 submission detail 页面
-- [ ] 实现 problem detail 页面
-- [ ] 实现 leaderboard 页面
-- [ ] 实现 discussion 页面
-- [ ] 实现最小题目级 thread 和 reply API
+- [x] 实现 submission 评测完成后公开
+- [x] 实现 per-problem leaderboard 更新逻辑
+- [x] 实现 submission detail 页面
+- [x] 实现 problem detail 页面
+- [x] 实现 leaderboard 页面
+- [x] 实现 discussion 页面
+- [x] 实现最小题目级 thread 和 reply API
 
 ### 对应测试
 

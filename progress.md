@@ -27,3 +27,7 @@
 2026-04-05T02:47:10+08:00 已完成 Phase 4 全量验证：lint、typecheck、unit、integration、test:e2e:public-eval 与 uv pytest 全部通过，并覆盖 worker 成功与失败回写路径。
 2026-04-05T02:49:12+08:00 已开始生成 Phase 4 showboat，准备记录 public eval 成功链路、失败回写示例及阶段验证命令。
 2026-04-05T02:53:20+08:00 已完成 Phase 4 showboat verify，当前待提交改动集中于 worker 公共评测链路、e2e 脚本与相关工程配置。
+2026-04-05T02:57:25+08:00 已开始推进 Phase 5：新增 leaderboard 更新规则、公开只读 API、最小 discussion API 与 server-rendered HTML 页面骨架。
+2026-04-05T11:35:42+08:00 已完成 Phase 5 全量验证：leaderboard、discussion、公开 submission 可见性与只读页面相关的 lint、typecheck、integration、test:e2e:leaderboard 全部通过。
+2026-04-05T11:36:29+08:00 已开始生成 Phase 5 showboat，准备记录 leaderboard 排序、discussion 展示与只读页面可达性的验收输出。
+2026-04-05T11:40:47+08:00 已完成 Phase 5 showboat verify，当前待提交改动集中于 leaderboard、discussion 与公开只读页面相关能力。

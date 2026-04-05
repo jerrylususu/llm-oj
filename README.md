@@ -53,7 +53,7 @@
 
 ## 当前阶段
 
-`Phase 4` 已完成。当前下一步应按 [tasks.md](./tasks.md) 进入 `Phase 5`，开始补齐 leaderboard、submission 可见性和只读网页。
+`Phase 5` 已完成。当前下一步应按 [tasks.md](./tasks.md) 进入 `Phase 6`，开始补齐 admin 闭环与 heldout official run。
 
 ## 本地开发基线
 

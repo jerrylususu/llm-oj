@@ -7,6 +7,7 @@ import type { Pool } from 'pg';
 import {
   type ProblemBundleSpec,
   hashAgentToken,
+  shouldReplaceLeaderboardEntry,
   validateProblemBundle
 } from '@llm-oj/shared';
 
@@ -122,6 +123,35 @@ export interface PersistedEvaluationResult extends EvaluationResultInput {
   readonly officialSummary: unknown;
   readonly logPath: string | null;
   readonly lastError: string | null;
+}
+
+export interface LeaderboardEntryRecord {
+  readonly agentId: string;
+  readonly agentName: string;
+  readonly bestSubmissionId: string;
+  readonly bestHiddenScore: number;
+  readonly officialScore: number | null;
+  readonly updatedAt: string;
+}
+
+export interface DiscussionReplyRecord {
+  readonly id: string;
+  readonly threadId: string;
+  readonly agentId: string;
+  readonly agentName: string;
+  readonly body: string;
+  readonly createdAt: string;
+}
+
+export interface DiscussionThreadRecord {
+  readonly id: string;
+  readonly problemId: string;
+  readonly agentId: string;
+  readonly agentName: string;
+  readonly title: string;
+  readonly body: string;
+  readonly createdAt: string;
+  readonly replies: DiscussionReplyRecord[];
 }
 
 function mapProblemVersionRow(row: {
@@ -819,4 +849,246 @@ export async function markEvaluationFinished(
       input.status === 'completed'
     ]
   );
+
+  if (input.status === 'completed' && input.evalType === 'public') {
+    const hiddenSummary = input.hiddenSummary as { score?: number } | null;
+
+    if (typeof hiddenSummary?.score === 'number') {
+      await upsertLeaderboardEntryForSubmission(
+        pool,
+        input.submissionId,
+        hiddenSummary.score,
+        input.shownResults
+      );
+    }
+  }
+}
+
+export async function upsertLeaderboardEntryForSubmission(
+  pool: Pool,
+  submissionId: string,
+  hiddenScore: number,
+  shownSummary: unknown
+): Promise<void> {
+  const submissionRows = await pool.query<{
+    problem_id: string;
+    agent_id: string;
+  }>(
+    `
+      SELECT problem_id, agent_id
+      FROM submissions
+      WHERE id = $1
+      LIMIT 1
+    `,
+    [submissionId]
+  );
+  const submission = submissionRows.rows[0];
+
+  if (!submission) {
+    throw new Error(`submission not found for leaderboard update: ${submissionId}`);
+  }
+
+  const currentRows = await pool.query<{ best_hidden_score: number }>(
+    `
+      SELECT best_hidden_score
+      FROM leaderboard_entries
+      WHERE problem_id = $1
+        AND agent_id = $2
+      LIMIT 1
+    `,
+    [submission.problem_id, submission.agent_id]
+  );
+  const current = currentRows.rows[0];
+
+  if (!shouldReplaceLeaderboardEntry(current ? { hiddenScore: current.best_hidden_score } : null, { hiddenScore })) {
+    return;
+  }
+
+  await pool.query(
+    `
+      INSERT INTO leaderboard_entries (
+        problem_id,
+        agent_id,
+        best_submission_id,
+        best_hidden_score,
+        shown_summary_json,
+        updated_at
+      )
+      VALUES ($1, $2, $3, $4, $5::jsonb, NOW())
+      ON CONFLICT (problem_id, agent_id) DO UPDATE
+      SET best_submission_id = EXCLUDED.best_submission_id,
+          best_hidden_score = EXCLUDED.best_hidden_score,
+          shown_summary_json = EXCLUDED.shown_summary_json,
+          updated_at = NOW()
+    `,
+    [
+      submission.problem_id,
+      submission.agent_id,
+      submissionId,
+      hiddenScore,
+      JSON.stringify(shownSummary)
+    ]
+  );
+}
+
+export async function listLeaderboardEntries(
+  pool: Pool,
+  problemIdOrSlug: string
+): Promise<LeaderboardEntryRecord[]> {
+  const result = await pool.query<{
+    agent_id: string;
+    agent_name: string;
+    best_submission_id: string;
+    best_hidden_score: number;
+    official_score: number | null;
+    updated_at: string;
+  }>(
+    `
+      SELECT
+        le.agent_id,
+        a.name AS agent_name,
+        le.best_submission_id,
+        le.best_hidden_score,
+        le.official_score,
+        le.updated_at
+      FROM leaderboard_entries le
+      JOIN agents a ON a.id = le.agent_id
+      JOIN problems p ON p.id = le.problem_id
+      WHERE p.id = $1 OR p.slug = $1
+      ORDER BY le.best_hidden_score DESC, le.updated_at ASC
+    `,
+    [problemIdOrSlug]
+  );
+
+  return result.rows.map((row) => ({
+    agentId: row.agent_id,
+    agentName: row.agent_name,
+    bestSubmissionId: row.best_submission_id,
+    bestHiddenScore: row.best_hidden_score,
+    officialScore: row.official_score,
+    updatedAt: row.updated_at
+  }));
+}
+
+export async function createDiscussionThread(
+  pool: Pool,
+  input: {
+    id: string;
+    problemId: string;
+    agentId: string;
+    title: string;
+    body: string;
+  }
+): Promise<void> {
+  const problem = await getPublishedProblem(pool, input.problemId);
+
+  if (!problem) {
+    throw new Error(`problem not found: ${input.problemId}`);
+  }
+
+  await pool.query(
+    `
+      INSERT INTO discussion_threads (id, problem_id, agent_id, title, body)
+      VALUES ($1, $2, $3, $4, $5)
+    `,
+    [input.id, problem.problemId, input.agentId, input.title, input.body]
+  );
+}
+
+export async function createDiscussionReply(
+  pool: Pool,
+  input: {
+    id: string;
+    threadId: string;
+    agentId: string;
+    body: string;
+  }
+): Promise<void> {
+  await pool.query(
+    `
+      INSERT INTO discussion_replies (id, thread_id, agent_id, body)
+      VALUES ($1, $2, $3, $4)
+    `,
+    [input.id, input.threadId, input.agentId, input.body]
+  );
+}
+
+export async function listDiscussionThreads(
+  pool: Pool,
+  problemIdOrSlug: string
+): Promise<DiscussionThreadRecord[]> {
+  const threadsResult = await pool.query<{
+    id: string;
+    problem_id: string;
+    agent_id: string;
+    agent_name: string;
+    title: string;
+    body: string;
+    created_at: string;
+  }>(
+    `
+      SELECT
+        t.id,
+        t.problem_id,
+        t.agent_id,
+        a.name AS agent_name,
+        t.title,
+        t.body,
+        t.created_at
+      FROM discussion_threads t
+      JOIN agents a ON a.id = t.agent_id
+      JOIN problems p ON p.id = t.problem_id
+      WHERE p.id = $1 OR p.slug = $1
+      ORDER BY t.created_at DESC
+    `,
+    [problemIdOrSlug]
+  );
+
+  const threadIds = threadsResult.rows.map((row) => row.id);
+  const repliesResult =
+    threadIds.length === 0
+      ? { rows: [] as Array<{ id: string; thread_id: string; agent_id: string; agent_name: string; body: string; created_at: string }> }
+      : await pool.query<{
+          id: string;
+          thread_id: string;
+          agent_id: string;
+          agent_name: string;
+          body: string;
+          created_at: string;
+        }>(
+          `
+            SELECT
+              r.id,
+              r.thread_id,
+              r.agent_id,
+              a.name AS agent_name,
+              r.body,
+              r.created_at
+            FROM discussion_replies r
+            JOIN agents a ON a.id = r.agent_id
+            WHERE r.thread_id = ANY($1::text[])
+            ORDER BY r.created_at ASC
+          `,
+          [threadIds]
+        );
+
+  return threadsResult.rows.map((thread) => ({
+    id: thread.id,
+    problemId: thread.problem_id,
+    agentId: thread.agent_id,
+    agentName: thread.agent_name,
+    title: thread.title,
+    body: thread.body,
+    createdAt: thread.created_at,
+    replies: repliesResult.rows
+      .filter((reply) => reply.thread_id === thread.id)
+      .map((reply) => ({
+        id: reply.id,
+        threadId: reply.thread_id,
+        agentId: reply.agent_id,
+        agentName: reply.agent_name,
+        body: reply.body,
+        createdAt: reply.created_at
+      }))
+  }));
 }
