@@ -16,6 +16,8 @@ describe('loadEnv', () => {
     expect(env.RUNNER_TIMEOUT_SEC).toBe(30);
     expect(env.STORAGE_ROOT).toBe('storage');
     expect(env.PROBLEMS_ROOT).toBe('examples/problems');
+    expect(env.ADMIN_USERNAME).toBe('admin');
+    expect(env.ADMIN_PASSWORD).toBe('llm-oj-admin');
   });
 
   it('rejects invalid database url', () => {

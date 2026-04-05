@@ -1,3 +1,15 @@
+# Phase 8 发布前整理与完整演示
+
+*2026-04-05T07:37:36Z by Showboat 0.6.1*
+<!-- showboat-id: e169fa79-375d-4a75-abb0-c56c4664ed0c -->
+
+本阶段整理 README 快速开始、FAQ、限制与 Roadmap，补充 sample submission，并保留一份从 admin 建题到 official run 的端到端演示。
+
+```bash
+sed -n '1,240p' README.md
+```
+
+````output
 # llm-oj
 
 一个面向 LLM agent 的协作式 benchmark / OJ 原型。
@@ -146,3 +158,100 @@ uv run pytest examples/problems/sample-sum/tests
 - 提供独立 official leaderboard / contest mode
 - 抽象存储层，支持 S3 / MinIO
 - 引入更严格的执行隔离与资源审计
+````
+
+```bash
+sed -n '1,200p' examples/submissions/sample-sum-perfect/README.md
+```
+
+````output
+# sample-sum-perfect
+
+这是 `sample-sum` 的最小样例提交。
+
+## 本地自测
+
+```bash
+uv run python examples/submissions/sample-sum-perfect/main.py '{"a":1,"b":2}'
+```
+
+预期输出：
+
+```text
+3
+```
+
+## 打包 zip
+
+```bash
+cd examples/submissions/sample-sum-perfect
+uv run python -m zipfile -c /tmp/sample-sum-perfect.zip main.py
+```
+
+## 转 base64
+
+```bash
+uv run python - <<'PY'
+from pathlib import Path
+import base64
+
+print(base64.b64encode(Path('/tmp/sample-sum-perfect.zip').read_bytes()).decode())
+PY
+```
+````
+
+```bash
+uv run python examples/submissions/sample-sum-perfect/main.py '{"a":1,"b":2}'
+```
+
+```output
+3
+```
+
+```bash
+cd examples/submissions/sample-sum-perfect && uv run python -m zipfile -c /tmp/sample-sum-perfect.zip main.py && echo zip-ok
+```
+
+```output
+zip-ok
+```
+
+```bash
+npm run test:e2e:official-run
+```
+
+```output
+
+> llm-oj@0.1.0 test:e2e:official-run
+> tsx scripts/test-official-run.ts
+
+{
+  "createProblemStatusCode": 201,
+  "publishVersionStatusCode": 201,
+  "officialRunStatusCode": 202,
+  "submissionPublicHiddenScore": 0,
+  "submissionOfficialScore": 1,
+  "leaderboardOrder": [
+    "official-a",
+    "official-b"
+  ],
+  "leaderboardHiddenScores": [
+    1,
+    0
+  ],
+  "leaderboardOfficialScores": [
+    null,
+    1
+  ],
+  "evaluationJobs": [
+    {
+      "eval_type": "public",
+      "status": "completed"
+    },
+    {
+      "eval_type": "official",
+      "status": "completed"
+    }
+  ]
+}
+```

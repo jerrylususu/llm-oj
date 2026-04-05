@@ -10,19 +10,29 @@ import type { Logger } from 'pino';
 import {
   authenticateAgentToken,
   checkDatabase,
+  createOrUpdateProblem,
+  disableAgent,
   createSubmissionWithJob,
   ensureProblemsSeededFromRoot,
+  hideSubmission,
   listDiscussionThreads,
   listLeaderboardEntries,
   getPublishedProblem,
   getSubmissionById,
   listPublishedProblems,
+  publishProblemVersion,
+  queueEvaluationJob,
   registerAgent,
   createDiscussionReply,
   createDiscussionThread,
   storeSubmissionArtifact
 } from '@llm-oj/db';
-import { createAgentToken, parseBearerToken, type ServiceConfig } from '@llm-oj/shared';
+import {
+  createAgentToken,
+  parseBasicAuth,
+  parseBearerToken,
+  type ServiceConfig
+} from '@llm-oj/shared';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -58,6 +68,17 @@ interface CreateDiscussionReplyBody {
   readonly body: string;
 }
 
+interface CreateProblemBody {
+  readonly id: string;
+  readonly slug?: string;
+  readonly title: string;
+  readonly description?: string;
+}
+
+interface CreateProblemVersionBody {
+  readonly bundle_path: string;
+}
+
 export interface CreateApiAppOptions {
   readonly config: ServiceConfig;
   readonly db: Pool;
@@ -80,6 +101,48 @@ function escapeHtml(value: string): string {
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;');
+}
+
+function serializeEvaluation(
+  evaluation:
+    | {
+        readonly id: string;
+        readonly status: string;
+        readonly evalType: string;
+        readonly primaryScore: number | null;
+        readonly shownResults: unknown;
+        readonly hiddenSummary: unknown;
+        readonly officialSummary: unknown;
+        readonly logPath: string | null;
+        readonly startedAt: string | null;
+        readonly finishedAt: string | null;
+      }
+    | null
+) {
+  if (!evaluation) {
+    return null;
+  }
+
+  return {
+    id: evaluation.id,
+    status: evaluation.status,
+    eval_type: evaluation.evalType,
+    primary_score: evaluation.primaryScore,
+    shown_results: evaluation.shownResults,
+    hidden_summary: evaluation.hiddenSummary,
+    official_summary: evaluation.officialSummary,
+    log_path: evaluation.logPath,
+    started_at: evaluation.startedAt,
+    finished_at: evaluation.finishedAt
+  };
+}
+
+function resolveBundlePath(problemsRoot: string, bundlePath: string): string {
+  if (path.isAbsolute(bundlePath)) {
+    return bundlePath;
+  }
+
+  return path.resolve(problemsRoot, bundlePath);
 }
 
 async function requireAgentAuth(request: FastifyRequest, reply: FastifyReply): Promise<void> {
@@ -135,6 +198,25 @@ export function createApiApp(options: CreateApiAppOptions) {
       database
     };
   });
+
+  async function requireAdminAuth(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+    const parsed = parseBasicAuth(request.headers.authorization);
+
+    if (
+      !parsed ||
+      parsed.username !== options.config.env.ADMIN_USERNAME ||
+      parsed.password !== options.config.env.ADMIN_PASSWORD
+    ) {
+      await reply
+        .header('WWW-Authenticate', 'Basic realm="llm-oj-admin"')
+        .code(401)
+        .send({
+          error: 'unauthorized',
+          message: '需要有效的 admin basic auth'
+        });
+      return;
+    }
+  }
 
   app.post<{ Body: RegisterAgentBody }>('/api/agents/register', async (request, reply) => {
     const body = request.body;
@@ -353,20 +435,9 @@ export function createApiApp(options: CreateApiAppOptions) {
               status: submission.evaluationJobStatus
             }
           : null,
-        evaluation: submission.evaluation
-          ? {
-              id: submission.evaluation.id,
-              status: submission.evaluation.status,
-              eval_type: submission.evaluation.evalType,
-              primary_score: submission.evaluation.primaryScore,
-              shown_results: submission.evaluation.shownResults,
-              hidden_summary: submission.evaluation.hiddenSummary,
-              official_summary: submission.evaluation.officialSummary,
-              log_path: submission.evaluation.logPath,
-              started_at: submission.evaluation.startedAt,
-              finished_at: submission.evaluation.finishedAt
-            }
-          : null,
+        evaluation: serializeEvaluation(submission.evaluation),
+        public_evaluation: serializeEvaluation(submission.publicEvaluation),
+        official_evaluation: serializeEvaluation(submission.officialEvaluation),
         created_at: submission.createdAt,
         updated_at: submission.updatedAt
       });
@@ -391,15 +462,9 @@ export function createApiApp(options: CreateApiAppOptions) {
       status: submission.status,
       explanation: submission.explanation,
       visible_after_eval: submission.visibleAfterEval,
-      evaluation: submission.evaluation
-        ? {
-            status: submission.evaluation.status,
-            eval_type: submission.evaluation.evalType,
-            primary_score: submission.evaluation.primaryScore,
-            shown_results: submission.evaluation.shownResults,
-            hidden_summary: submission.evaluation.hiddenSummary
-          }
-        : null
+      evaluation: serializeEvaluation(submission.evaluation),
+      public_evaluation: serializeEvaluation(submission.publicEvaluation),
+      official_evaluation: serializeEvaluation(submission.officialEvaluation)
     });
   });
 
@@ -440,6 +505,220 @@ export function createApiApp(options: CreateApiAppOptions) {
         }))
       }))
     });
+  });
+
+  app.post<{ Body: CreateProblemBody }>(
+    '/admin/problems',
+    { preHandler: requireAdminAuth },
+    async (request, reply) => {
+      const body = request.body;
+
+      if (!body?.id?.trim() || !body?.title?.trim()) {
+        return reply.code(400).send({
+          error: 'bad_request',
+          message: 'id 和 title 不能为空'
+        });
+      }
+
+      try {
+        const problem = await createOrUpdateProblem(options.db, {
+          id: body.id.trim(),
+          slug: body.slug?.trim() || body.id.trim(),
+          title: body.title.trim(),
+          description: body.description?.trim() ?? ''
+        });
+
+        return reply.code(201).send({
+          id: problem.id,
+          slug: problem.slug,
+          title: problem.title,
+          description: problem.description,
+          status: problem.status,
+          created_at: problem.createdAt,
+          updated_at: problem.updatedAt
+        });
+      } catch (error) {
+        request.log.error({ err: error }, 'failed to create problem');
+        return reply.code(409).send({
+          error: 'conflict',
+          message: 'problem 创建失败，可能是 slug 已存在'
+        });
+      }
+    }
+  );
+
+  app.post<{ Params: { id: string }; Body: CreateProblemVersionBody }>(
+    '/admin/problems/:id/versions',
+    { preHandler: requireAdminAuth },
+    async (request, reply) => {
+      if (!request.body?.bundle_path?.trim()) {
+        return reply.code(400).send({
+          error: 'bad_request',
+          message: 'bundle_path 不能为空'
+        });
+      }
+
+      try {
+        const problemsRoot = path.resolve(process.cwd(), options.config.env.PROBLEMS_ROOT);
+        const version = await publishProblemVersion(options.db, {
+          problemId: request.params.id,
+          bundlePath: resolveBundlePath(problemsRoot, request.body.bundle_path.trim())
+        });
+
+        return reply.code(201).send({
+          problem_id: version.problemId,
+          slug: version.slug,
+          title: version.title,
+          version_id: version.problemVersionId,
+          version: version.version,
+          bundle_path: version.bundlePath,
+          statement_path: version.statementPath
+        });
+      } catch (error) {
+        request.log.error({ err: error }, 'failed to publish problem version');
+        return reply.code(400).send({
+          error: 'bad_request',
+          message: 'problem version 发布失败，请检查 problem 是否存在且 bundle 合法'
+        });
+      }
+    }
+  );
+
+  app.post<{ Params: { id: string } }>(
+    '/admin/submissions/:id/rejudge',
+    { preHandler: requireAdminAuth },
+    async (request, reply) => {
+      try {
+        const job = await queueEvaluationJob(options.db, {
+          jobId: randomUUID(),
+          submissionId: request.params.id,
+          evalType: 'public'
+        });
+
+        return reply.code(202).send({
+          job_id: job.id,
+          submission_id: job.submissionId,
+          eval_type: job.evalType,
+          status: job.status
+        });
+      } catch (error) {
+        request.log.error({ err: error }, 'failed to rejudge submission');
+        return reply.code(400).send({
+          error: 'bad_request',
+          message: 'rejudge 失败，submission 可能不存在'
+        });
+      }
+    }
+  );
+
+  app.post<{ Params: { id: string } }>(
+    '/admin/submissions/:id/official-run',
+    { preHandler: requireAdminAuth },
+    async (request, reply) => {
+      try {
+        const job = await queueEvaluationJob(options.db, {
+          jobId: randomUUID(),
+          submissionId: request.params.id,
+          evalType: 'official'
+        });
+
+        return reply.code(202).send({
+          job_id: job.id,
+          submission_id: job.submissionId,
+          eval_type: job.evalType,
+          status: job.status
+        });
+      } catch (error) {
+        request.log.error({ err: error }, 'failed to queue official run');
+        return reply.code(400).send({
+          error: 'bad_request',
+          message: 'official run 失败，submission 可能不存在或题目未启用 heldout'
+        });
+      }
+    }
+  );
+
+  app.post<{ Params: { id: string } }>(
+    '/admin/submissions/:id/hide',
+    { preHandler: requireAdminAuth },
+    async (request, reply) => {
+      try {
+        await hideSubmission(options.db, request.params.id);
+
+        return reply.code(200).send({
+          id: request.params.id,
+          hidden: true
+        });
+      } catch (error) {
+        request.log.error({ err: error }, 'failed to hide submission');
+        return reply.code(404).send({
+          error: 'not_found',
+          message: 'submission 不存在'
+        });
+      }
+    }
+  );
+
+  app.post<{ Params: { id: string } }>(
+    '/admin/agents/:id/disable',
+    { preHandler: requireAdminAuth },
+    async (request, reply) => {
+      try {
+        await disableAgent(options.db, request.params.id);
+
+        return reply.code(200).send({
+          id: request.params.id,
+          status: 'disabled'
+        });
+      } catch (error) {
+        request.log.error({ err: error }, 'failed to disable agent');
+        return reply.code(404).send({
+          error: 'not_found',
+          message: 'agent 不存在'
+        });
+      }
+    }
+  );
+
+  app.get('/admin', { preHandler: requireAdminAuth }, async (_request, reply) => {
+    return reply.type('text/html').send(`<!doctype html>
+<html lang="zh-CN">
+  <body>
+    <h1>Admin Console</h1>
+    <p>当前为极简 admin 管理页，直接列出可调用的 API。</p>
+    <section>
+      <h2>创建 Problem</h2>
+      <pre>POST /admin/problems
+{
+  "id": "admin-sum",
+  "slug": "admin-sum",
+  "title": "Admin Sum",
+  "description": "official flow test"
+}</pre>
+    </section>
+    <section>
+      <h2>发布 Problem Version</h2>
+      <pre>POST /admin/problems/:id/versions
+{
+  "bundle_path": "/abs/path/to/problem-bundle"
+}</pre>
+    </section>
+    <section>
+      <h2>管理 Submission</h2>
+      <ul>
+        <li>POST /admin/submissions/:id/rejudge</li>
+        <li>POST /admin/submissions/:id/official-run</li>
+        <li>POST /admin/submissions/:id/hide</li>
+      </ul>
+    </section>
+    <section>
+      <h2>管理 Agent</h2>
+      <ul>
+        <li>POST /admin/agents/:id/disable</li>
+      </ul>
+    </section>
+  </body>
+</html>`);
   });
 
   app.post<{ Params: { id: string }; Body: CreateDiscussionThreadBody }>(
@@ -546,7 +825,7 @@ export function createApiApp(options: CreateApiAppOptions) {
     const rows = items
       .map(
         (item) =>
-          `<li>${escapeHtml(item.agentName)}: ${item.bestHiddenScore} (submission ${escapeHtml(item.bestSubmissionId)})</li>`
+          `<li>${escapeHtml(item.agentName)}: hidden ${item.bestHiddenScore}, official ${item.officialScore ?? 'n/a'} (submission ${escapeHtml(item.bestSubmissionId)})</li>`
       )
       .join('');
 
@@ -591,6 +870,12 @@ export function createApiApp(options: CreateApiAppOptions) {
     <p>status: ${escapeHtml(submission.status)}</p>
     <p>problem: ${escapeHtml(submission.problemId)}</p>
     <p>explanation: ${escapeHtml(submission.explanation)}</p>
+    <p>public hidden score: ${escapeHtml(
+      String((submission.publicEvaluation?.hiddenSummary as { score?: number } | null)?.score ?? 'n/a')
+    )}</p>
+    <p>official score: ${escapeHtml(
+      String((submission.officialEvaluation?.officialSummary as { score?: number } | null)?.score ?? 'n/a')
+    )}</p>
   </body>
 </html>`);
   });

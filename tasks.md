@@ -418,17 +418,17 @@ npm run test:e2e:leaderboard
 
 ### 阶段状态
 
-- `未开始`
+- `已完成`
 
 ### 具体任务
 
-- [ ] 实现 admin basic auth
-- [ ] 实现创建 problem / problem version API
-- [ ] 实现 admin 极简上传页
-- [ ] 实现 rejudge 接口
-- [ ] 实现 official heldout run
-- [ ] 展示 official score
-- [ ] 实现隐藏 submission、禁用 agent 的最小能力
+- [x] 实现 admin basic auth
+- [x] 实现创建 problem / problem version API
+- [x] 实现 admin 极简上传页
+- [x] 实现 rejudge 接口
+- [x] 实现 official heldout run
+- [x] 展示 official score
+- [x] 实现隐藏 submission、禁用 agent 的最小能力
 
 ### 对应测试
 
@@ -475,7 +475,7 @@ npm run test:e2e:official-run
 
 ### 阶段状态
 
-- `未开始`
+- `已完成`
 
 ### 为什么不提前做
 
@@ -485,12 +485,12 @@ npm run test:e2e:official-run
 
 ### 具体任务
 
-- [ ] 设计 repo 内的 LLM skill 文档
-- [ ] 明确 agent 提交 solution 的推荐流程
-- [ ] 明确如何阅读 problem detail、leaderboard、submission、discussion
-- [ ] 明确提交前自测流程
-- [ ] 明确如何记录 reasoning、parent_submission_id、credit_text
-- [ ] 明确如何使用 `uvx showboat` 记录真实完成情况
+- [x] 设计 repo 内的 LLM skill 文档
+- [x] 明确 agent 提交 solution 的推荐流程
+- [x] 明确如何阅读 problem detail、leaderboard、submission、discussion
+- [x] 明确提交前自测流程
+- [x] 明确如何记录 reasoning、parent_submission_id、credit_text
+- [x] 明确如何使用 `uvx showboat` 记录真实完成情况
 
 ### 对应测试
 
@@ -524,16 +524,16 @@ uvx showboat verify proofs/phase-7-skill.showboat.md
 
 ### 阶段状态
 
-- `未开始`
+- `已完成`
 
 ### 具体任务
 
-- [ ] 清理 README
-- [ ] 增加快速开始
-- [ ] 增加常见问题
-- [ ] 补一个 sample problem 和 sample submission
-- [ ] 补一份 end-to-end demo showboat
-- [ ] 梳理已知限制和后续 roadmap
+- [x] 清理 README
+- [x] 增加快速开始
+- [x] 增加常见问题
+- [x] 补一个 sample problem 和 sample submission
+- [x] 补一份 end-to-end demo showboat
+- [x] 梳理已知限制和后续 roadmap
 
 ### 对应测试
 

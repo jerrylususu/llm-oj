@@ -31,3 +31,14 @@
 2026-04-05T11:35:42+08:00 已完成 Phase 5 全量验证：leaderboard、discussion、公开 submission 可见性与只读页面相关的 lint、typecheck、integration、test:e2e:leaderboard 全部通过。
 2026-04-05T11:36:29+08:00 已开始生成 Phase 5 showboat，准备记录 leaderboard 排序、discussion 展示与只读页面可达性的验收输出。
 2026-04-05T11:40:47+08:00 已完成 Phase 5 showboat verify，当前待提交改动集中于 leaderboard、discussion 与公开只读页面相关能力。
+2026-04-05T14:40:18+08:00 已恢复现场并开始核对任务清单、设计文档与仓库状态，确认最终收尾项。
+2026-04-05T14:41:34+08:00 已确认当前剩余工作为 Phase 6 至 Phase 8，开始基于现有 API、worker 与任务要求补齐 admin 与最终收尾能力。
+2026-04-05T14:46:47+08:00 已完成 admin 基础鉴权与配置项的共享层补充，开始落库实现建题、official run 与管理动作。
+2026-04-05T14:50:08+08:00 已补齐数据库层的建题发布、rejudge、official job、隐藏 submission 与禁用 agent 操作，开始接入 API 与页面。
+2026-04-05T14:55:15+08:00 已接入 admin API、极简管理页与 official score 展示，开始补充 Phase 6 集成测试与 e2e 脚本。
+2026-04-05T15:12:25+08:00 已定位 Phase 6 测试卡点落在 admin 页面响应，开始简化页面实现并继续排查长链路阻塞点。
+2026-04-05T15:19:03+08:00 已确认 Phase 6 链路本身可用，问题源于定向排查时未先构建导致读取旧 dist 产物，当前开始清理临时日志并执行全量验证。
+2026-04-05T15:27:48+08:00 已转入 Phase 7 与 Phase 8 收尾，开始补 repo skill、sample submission 及发布前 README 整理。
+2026-04-05T15:31:22+08:00 已补齐 README、repo skill 与 sample submission 实体文件，开始生成 Phase 6 至 Phase 8 的 showboat 证明材料。
+2026-04-05T15:35:42+08:00 已修正 showboat note 写入时的 shell 引号问题，继续补录 Phase 7 与 Phase 8 proof。
+2026-04-05T15:49:12+08:00 已完成 Phase 6 至 Phase 8 的代码、文档、proof 与全量关键验证，开始整理差异并执行最终提交。

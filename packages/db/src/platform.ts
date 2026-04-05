@@ -49,6 +49,28 @@ export interface ProblemVersionRecord {
   readonly specJson: ProblemBundleSpec;
 }
 
+export interface ProblemRecord {
+  readonly id: string;
+  readonly slug: string;
+  readonly title: string;
+  readonly description: string;
+  readonly status: string;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+export interface CreateProblemInput {
+  readonly id: string;
+  readonly slug: string;
+  readonly title: string;
+  readonly description: string;
+}
+
+export interface PublishProblemVersionInput {
+  readonly problemId: string;
+  readonly bundlePath: string;
+}
+
 export interface CreateSubmissionInput {
   readonly submissionId: string;
   readonly jobId: string;
@@ -77,6 +99,30 @@ export interface SubmissionRecord {
   readonly evaluationJobId: string | null;
   readonly evaluationJobStatus: string | null;
   readonly evaluation: {
+    readonly id: string;
+    readonly status: string;
+    readonly evalType: string;
+    readonly primaryScore: number | null;
+    readonly shownResults: unknown;
+    readonly hiddenSummary: unknown;
+    readonly officialSummary: unknown;
+    readonly logPath: string | null;
+    readonly startedAt: string | null;
+    readonly finishedAt: string | null;
+  } | null;
+  readonly publicEvaluation: {
+    readonly id: string;
+    readonly status: string;
+    readonly evalType: string;
+    readonly primaryScore: number | null;
+    readonly shownResults: unknown;
+    readonly hiddenSummary: unknown;
+    readonly officialSummary: unknown;
+    readonly logPath: string | null;
+    readonly startedAt: string | null;
+    readonly finishedAt: string | null;
+  } | null;
+  readonly officialEvaluation: {
     readonly id: string;
     readonly status: string;
     readonly evalType: string;
@@ -123,6 +169,12 @@ export interface PersistedEvaluationResult extends EvaluationResultInput {
   readonly officialSummary: unknown;
   readonly logPath: string | null;
   readonly lastError: string | null;
+}
+
+export interface QueueEvaluationJobInput {
+  readonly jobId: string;
+  readonly submissionId: string;
+  readonly evalType: 'public' | 'official';
 }
 
 export interface LeaderboardEntryRecord {
@@ -175,6 +227,56 @@ function mapProblemVersionRow(row: {
     bundlePath: row.bundle_path,
     statementPath: row.statement_path,
     specJson: row.spec_json
+  };
+}
+
+function mapProblemRow(row: {
+  id: string;
+  slug: string;
+  title: string;
+  description: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}): ProblemRecord {
+  return {
+    id: row.id,
+    slug: row.slug,
+    title: row.title,
+    description: row.description,
+    status: row.status,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+}
+
+function mapEvaluationRow(row: {
+  id: string | null;
+  status: string | null;
+  eval_type: string | null;
+  primary_score: number | null;
+  shown_results_json: unknown;
+  hidden_summary_json: unknown;
+  official_summary_json: unknown;
+  log_path: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+}) {
+  if (!row.id) {
+    return null;
+  }
+
+  return {
+    id: row.id,
+    status: row.status ?? 'unknown',
+    evalType: row.eval_type ?? 'public',
+    primaryScore: row.primary_score,
+    shownResults: row.shown_results_json,
+    hiddenSummary: row.hidden_summary_json,
+    officialSummary: row.official_summary_json,
+    logPath: row.log_path,
+    startedAt: row.started_at,
+    finishedAt: row.finished_at
   };
 }
 
@@ -274,6 +376,135 @@ export async function authenticateAgentToken(
     tokenId: row.token_id,
     name: row.name
   };
+}
+
+export async function createOrUpdateProblem(
+  pool: Pool,
+  input: CreateProblemInput
+): Promise<ProblemRecord> {
+  const result = await pool.query<{
+    id: string;
+    slug: string;
+    title: string;
+    description: string;
+    status: string;
+    created_at: string;
+    updated_at: string;
+  }>(
+    `
+      INSERT INTO problems (id, slug, title, description, status)
+      VALUES ($1, $2, $3, $4, 'active')
+      ON CONFLICT (id) DO UPDATE
+      SET slug = EXCLUDED.slug,
+          title = EXCLUDED.title,
+          description = EXCLUDED.description,
+          status = 'active',
+          updated_at = NOW()
+      RETURNING id, slug, title, description, status, created_at, updated_at
+    `,
+    [input.id, input.slug, input.title, input.description]
+  );
+
+  const row = result.rows[0];
+  if (!row) {
+    throw new Error('创建 problem 后未返回记录');
+  }
+
+  return mapProblemRow(row);
+}
+
+export async function publishProblemVersion(
+  pool: Pool,
+  input: PublishProblemVersionInput
+): Promise<ProblemVersionRecord> {
+  const validated = await validateProblemBundle(input.bundlePath);
+
+  if (validated.spec.problem_id !== input.problemId) {
+    throw new Error(
+      `problem bundle id mismatch: expected ${input.problemId}, got ${validated.spec.problem_id}`
+    );
+  }
+
+  const problemRows = await pool.query<{ id: string; slug: string; description: string }>(
+    `
+      SELECT id, slug, description
+      FROM problems
+      WHERE id = $1
+      LIMIT 1
+    `,
+    [input.problemId]
+  );
+  const problem = problemRows.rows[0];
+
+  if (!problem) {
+    throw new Error(`problem not found: ${input.problemId}`);
+  }
+
+  const versionId = `${input.problemId}:${validated.spec.problem_version}`;
+  const result = await pool.query<{
+    problem_id: string;
+    slug: string;
+    title: string;
+    description: string;
+    problem_version_id: string;
+    version: string;
+    bundle_path: string;
+    statement_path: string;
+    spec_json: ProblemBundleSpec;
+  }>(
+    `
+      WITH upserted_version AS (
+        INSERT INTO problem_versions (
+          id,
+          problem_id,
+          version,
+          bundle_path,
+          statement_path,
+          spec_json,
+          status
+        )
+        VALUES ($1, $2, $3, $4, $5, $6::jsonb, 'published')
+        ON CONFLICT (problem_id, version) DO UPDATE
+        SET bundle_path = EXCLUDED.bundle_path,
+            statement_path = EXCLUDED.statement_path,
+            spec_json = EXCLUDED.spec_json,
+            status = 'published'
+        RETURNING id, problem_id, version, bundle_path, statement_path, spec_json
+      )
+      UPDATE problems p
+      SET title = $7,
+          status = 'active',
+          updated_at = NOW()
+      FROM upserted_version v
+      WHERE p.id = v.problem_id
+      RETURNING
+        p.id AS problem_id,
+        p.slug,
+        p.title,
+        p.description,
+        v.id AS problem_version_id,
+        v.version,
+        v.bundle_path,
+        v.statement_path,
+        v.spec_json
+    `,
+    [
+      versionId,
+      input.problemId,
+      validated.spec.problem_version,
+      input.bundlePath,
+      validated.paths.statementPath,
+      JSON.stringify(validated.spec),
+      validated.spec.problem_title
+    ]
+  );
+
+  const row = result.rows[0];
+  if (!row) {
+    throw new Error('发布 problem version 后未返回记录');
+  }
+
+  return mapProblemVersionRow(row);
 }
 
 export async function listPublishedProblems(pool: Pool): Promise<ProblemVersionRecord[]> {
@@ -576,7 +807,9 @@ export async function createSubmissionWithJob(
       updatedAt: row.updated_at,
       evaluationJobId: input.jobId,
       evaluationJobStatus: 'queued',
-      evaluation: null
+      evaluation: null,
+      publicEvaluation: null,
+      officialEvaluation: null
     };
   } catch (error) {
     await client.query('ROLLBACK');
@@ -604,18 +837,28 @@ export async function getSubmissionById(
     visible_after_eval: boolean;
     created_at: string;
     updated_at: string;
-    evaluation_job_id: string | null;
-    evaluation_job_status: string | null;
-    evaluation_id: string | null;
-    evaluation_status: string | null;
-    evaluation_eval_type: string | null;
-    evaluation_primary_score: number | null;
-    shown_results_json: unknown;
-    hidden_summary_json: unknown;
-    official_summary_json: unknown;
-    evaluation_log_path: string | null;
-    evaluation_started_at: string | null;
-    evaluation_finished_at: string | null;
+    latest_job_id: string | null;
+    latest_job_status: string | null;
+    public_evaluation_id: string | null;
+    public_evaluation_status: string | null;
+    public_evaluation_eval_type: string | null;
+    public_evaluation_primary_score: number | null;
+    public_shown_results_json: unknown;
+    public_hidden_summary_json: unknown;
+    public_official_summary_json: unknown;
+    public_evaluation_log_path: string | null;
+    public_evaluation_started_at: string | null;
+    public_evaluation_finished_at: string | null;
+    official_evaluation_id: string | null;
+    official_evaluation_status: string | null;
+    official_evaluation_eval_type: string | null;
+    official_evaluation_primary_score: number | null;
+    official_shown_results_json: unknown;
+    official_hidden_summary_json: unknown;
+    official_official_summary_json: unknown;
+    official_evaluation_log_path: string | null;
+    official_evaluation_started_at: string | null;
+    official_evaluation_finished_at: string | null;
   }>(
     `
       SELECT
@@ -632,20 +875,36 @@ export async function getSubmissionById(
         s.visible_after_eval,
         s.created_at,
         s.updated_at,
-        j.id AS evaluation_job_id,
-        j.status AS evaluation_job_status,
-        e.id AS evaluation_id,
-        e.status AS evaluation_status,
-        e.eval_type AS evaluation_eval_type,
-        e.primary_score AS evaluation_primary_score,
-        e.shown_results_json,
-        e.hidden_summary_json,
-        e.official_summary_json,
-        e.log_path AS evaluation_log_path,
-        e.started_at AS evaluation_started_at,
-        e.finished_at AS evaluation_finished_at
+        j.id AS latest_job_id,
+        j.status AS latest_job_status,
+        pe.id AS public_evaluation_id,
+        pe.status AS public_evaluation_status,
+        pe.eval_type AS public_evaluation_eval_type,
+        pe.primary_score AS public_evaluation_primary_score,
+        pe.shown_results_json AS public_shown_results_json,
+        pe.hidden_summary_json AS public_hidden_summary_json,
+        pe.official_summary_json AS public_official_summary_json,
+        pe.log_path AS public_evaluation_log_path,
+        pe.started_at AS public_evaluation_started_at,
+        pe.finished_at AS public_evaluation_finished_at,
+        oe.id AS official_evaluation_id,
+        oe.status AS official_evaluation_status,
+        oe.eval_type AS official_evaluation_eval_type,
+        oe.primary_score AS official_evaluation_primary_score,
+        oe.shown_results_json AS official_shown_results_json,
+        oe.hidden_summary_json AS official_hidden_summary_json,
+        oe.official_summary_json AS official_official_summary_json,
+        oe.log_path AS official_evaluation_log_path,
+        oe.started_at AS official_evaluation_started_at,
+        oe.finished_at AS official_evaluation_finished_at
       FROM submissions s
-      LEFT JOIN evaluation_jobs j ON j.submission_id = s.id
+      LEFT JOIN LATERAL (
+        SELECT id, status
+        FROM evaluation_jobs
+        WHERE submission_id = s.id
+        ORDER BY created_at DESC
+        LIMIT 1
+      ) j ON TRUE
       LEFT JOIN LATERAL (
         SELECT
           id,
@@ -660,11 +919,29 @@ export async function getSubmissionById(
           finished_at
         FROM evaluations
         WHERE submission_id = s.id
+          AND eval_type = 'public'
         ORDER BY created_at DESC
         LIMIT 1
-      ) e ON TRUE
+      ) pe ON TRUE
+      LEFT JOIN LATERAL (
+        SELECT
+          id,
+          status,
+          eval_type,
+          primary_score,
+          shown_results_json,
+          hidden_summary_json,
+          official_summary_json,
+          log_path,
+          started_at,
+          finished_at
+        FROM evaluations
+        WHERE submission_id = s.id
+          AND eval_type = 'official'
+        ORDER BY created_at DESC
+        LIMIT 1
+      ) oe ON TRUE
       WHERE s.id = $1
-      ORDER BY j.created_at DESC NULLS LAST
       LIMIT 1
     `,
     [submissionId]
@@ -689,22 +966,57 @@ export async function getSubmissionById(
     visibleAfterEval: row.visible_after_eval,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-    evaluationJobId: row.evaluation_job_id,
-    evaluationJobStatus: row.evaluation_job_status,
-    evaluation: row.evaluation_id
-      ? {
-          id: row.evaluation_id,
-          status: row.evaluation_status ?? 'unknown',
-          evalType: row.evaluation_eval_type ?? 'public',
-          primaryScore: row.evaluation_primary_score,
-          shownResults: row.shown_results_json,
-          hiddenSummary: row.hidden_summary_json,
-          officialSummary: row.official_summary_json,
-          logPath: row.evaluation_log_path,
-          startedAt: row.evaluation_started_at,
-          finishedAt: row.evaluation_finished_at
-        }
-      : null
+    evaluationJobId: row.latest_job_id,
+    evaluationJobStatus: row.latest_job_status,
+    evaluation:
+      mapEvaluationRow({
+        id: row.public_evaluation_id,
+        status: row.public_evaluation_status,
+        eval_type: row.public_evaluation_eval_type,
+        primary_score: row.public_evaluation_primary_score,
+        shown_results_json: row.public_shown_results_json,
+        hidden_summary_json: row.public_hidden_summary_json,
+        official_summary_json: row.public_official_summary_json,
+        log_path: row.public_evaluation_log_path,
+        started_at: row.public_evaluation_started_at,
+        finished_at: row.public_evaluation_finished_at
+      }) ??
+      mapEvaluationRow({
+        id: row.official_evaluation_id,
+        status: row.official_evaluation_status,
+        eval_type: row.official_evaluation_eval_type,
+        primary_score: row.official_evaluation_primary_score,
+        shown_results_json: row.official_shown_results_json,
+        hidden_summary_json: row.official_hidden_summary_json,
+        official_summary_json: row.official_official_summary_json,
+        log_path: row.official_evaluation_log_path,
+        started_at: row.official_evaluation_started_at,
+        finished_at: row.official_evaluation_finished_at
+      }),
+    publicEvaluation: mapEvaluationRow({
+      id: row.public_evaluation_id,
+      status: row.public_evaluation_status,
+      eval_type: row.public_evaluation_eval_type,
+      primary_score: row.public_evaluation_primary_score,
+      shown_results_json: row.public_shown_results_json,
+      hidden_summary_json: row.public_hidden_summary_json,
+      official_summary_json: row.public_official_summary_json,
+      log_path: row.public_evaluation_log_path,
+      started_at: row.public_evaluation_started_at,
+      finished_at: row.public_evaluation_finished_at
+    }),
+    officialEvaluation: mapEvaluationRow({
+      id: row.official_evaluation_id,
+      status: row.official_evaluation_status,
+      eval_type: row.official_evaluation_eval_type,
+      primary_score: row.official_evaluation_primary_score,
+      shown_results_json: row.official_shown_results_json,
+      hidden_summary_json: row.official_hidden_summary_json,
+      official_summary_json: row.official_official_summary_json,
+      log_path: row.official_evaluation_log_path,
+      started_at: row.official_evaluation_started_at,
+      finished_at: row.official_evaluation_finished_at
+    })
   };
 }
 
@@ -757,9 +1069,11 @@ export async function claimNextEvaluationJob(
     return null;
   }
 
-  await pool.query(`UPDATE submissions SET status = 'running', updated_at = NOW() WHERE id = $1`, [
-    row.submission_id
-  ]);
+  if (row.eval_type === 'public') {
+    await pool.query(`UPDATE submissions SET status = 'running', updated_at = NOW() WHERE id = $1`, [
+      row.submission_id
+    ]);
+  }
 
   return {
     id: row.id,
@@ -771,6 +1085,122 @@ export async function claimNextEvaluationJob(
     attemptCount: row.attempt_count,
     payload: row.payload_json
   };
+}
+
+export async function queueEvaluationJob(
+  pool: Pool,
+  input: QueueEvaluationJobInput
+): Promise<EvaluationJobRecord> {
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    const submissionResult = await client.query<{
+      id: string;
+      problem_id: string;
+      problem_version_id: string;
+      agent_id: string;
+      artifact_path: string;
+      status: string;
+      visible_after_eval: boolean;
+      bundle_path: string;
+      spec_json: ProblemBundleSpec;
+    }>(
+      `
+        SELECT
+          s.id,
+          s.problem_id,
+          s.problem_version_id,
+          s.agent_id,
+          s.artifact_path,
+          s.status,
+          s.visible_after_eval,
+          pv.bundle_path,
+          pv.spec_json
+        FROM submissions s
+        JOIN problem_versions pv ON pv.id = s.problem_version_id
+        WHERE s.id = $1
+        LIMIT 1
+      `,
+      [input.submissionId]
+    );
+    const submission = submissionResult.rows[0];
+
+    if (!submission) {
+      throw new Error(`submission not found: ${input.submissionId}`);
+    }
+
+    if (input.evalType === 'official' && !submission.spec_json.datasets.heldout_enabled) {
+      throw new Error(`problem version does not support heldout official run: ${submission.problem_version_id}`);
+    }
+
+    await client.query(
+      `
+        INSERT INTO evaluation_jobs (
+          id,
+          submission_id,
+          problem_id,
+          problem_version_id,
+          eval_type,
+          status,
+          priority,
+          payload_json
+        )
+        VALUES ($1, $2, $3, $4, $5, 'queued', $6, $7::jsonb)
+      `,
+      [
+        input.jobId,
+        submission.id,
+        submission.problem_id,
+        submission.problem_version_id,
+        input.evalType,
+        input.evalType === 'official' ? 10 : 0,
+        JSON.stringify({
+          artifact_path: submission.artifact_path,
+          bundle_path: submission.bundle_path,
+          problem_id: submission.problem_id,
+          problem_version_id: submission.problem_version_id
+        })
+      ]
+    );
+
+    if (input.evalType === 'public') {
+      await client.query(
+        `
+          UPDATE submissions
+          SET status = 'queued',
+              visible_after_eval = FALSE,
+              updated_at = NOW()
+          WHERE id = $1
+        `,
+        [submission.id]
+      );
+    }
+
+    await client.query('COMMIT');
+
+    return {
+      id: input.jobId,
+      submissionId: submission.id,
+      problemId: submission.problem_id,
+      problemVersionId: submission.problem_version_id,
+      evalType: input.evalType,
+      status: 'queued',
+      attemptCount: 0,
+      payload: {
+        artifact_path: submission.artifact_path,
+        bundle_path: submission.bundle_path,
+        problem_id: submission.problem_id,
+        problem_version_id: submission.problem_version_id
+      }
+    };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 export async function markEvaluationStarted(
@@ -835,20 +1265,22 @@ export async function markEvaluationFinished(
     [input.jobId, input.status === 'completed' ? 'completed' : 'failed', input.lastError]
   );
 
-  await pool.query(
-    `
-      UPDATE submissions
-      SET status = $2,
-          visible_after_eval = $3,
-          updated_at = NOW()
-      WHERE id = $1
-    `,
-    [
-      input.submissionId,
-      input.status === 'completed' ? 'completed' : 'failed',
-      input.status === 'completed'
-    ]
-  );
+  if (input.evalType === 'public') {
+    await pool.query(
+      `
+        UPDATE submissions
+        SET status = $2,
+            visible_after_eval = $3,
+            updated_at = NOW()
+        WHERE id = $1
+      `,
+      [
+        input.submissionId,
+        input.status === 'completed' ? 'completed' : 'failed',
+        input.status === 'completed'
+      ]
+    );
+  }
 
   if (input.status === 'completed' && input.evalType === 'public') {
     const hiddenSummary = input.hiddenSummary as { score?: number } | null;
@@ -860,6 +1292,14 @@ export async function markEvaluationFinished(
         hiddenSummary.score,
         input.shownResults
       );
+    }
+  }
+
+  if (input.status === 'completed' && input.evalType === 'official') {
+    const officialSummary = input.officialSummary as { score?: number } | null;
+
+    if (typeof officialSummary?.score === 'number') {
+      await updateOfficialScoreForSubmission(pool, input.submissionId, officialSummary.score);
     }
   }
 }
@@ -931,6 +1371,41 @@ export async function upsertLeaderboardEntryForSubmission(
   );
 }
 
+export async function updateOfficialScoreForSubmission(
+  pool: Pool,
+  submissionId: string,
+  officialScore: number
+): Promise<void> {
+  const submissionRows = await pool.query<{
+    problem_id: string;
+    agent_id: string;
+  }>(
+    `
+      SELECT problem_id, agent_id
+      FROM submissions
+      WHERE id = $1
+      LIMIT 1
+    `,
+    [submissionId]
+  );
+  const submission = submissionRows.rows[0];
+
+  if (!submission) {
+    throw new Error(`submission not found for official score update: ${submissionId}`);
+  }
+
+  await pool.query(
+    `
+      UPDATE leaderboard_entries
+      SET official_score = $3,
+          updated_at = NOW()
+      WHERE problem_id = $1
+        AND agent_id = $2
+    `,
+    [submission.problem_id, submission.agent_id, officialScore]
+  );
+}
+
 export async function listLeaderboardEntries(
   pool: Pool,
   problemIdOrSlug: string
@@ -968,6 +1443,141 @@ export async function listLeaderboardEntries(
     officialScore: row.official_score,
     updatedAt: row.updated_at
   }));
+}
+
+export async function hideSubmission(pool: Pool, submissionId: string): Promise<void> {
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    const submissionResult = await client.query<{
+      problem_id: string;
+      agent_id: string;
+    }>(
+      `
+        UPDATE submissions
+        SET visible_after_eval = FALSE,
+            updated_at = NOW()
+        WHERE id = $1
+        RETURNING problem_id, agent_id
+      `,
+      [submissionId]
+    );
+    const submission = submissionResult.rows[0];
+
+    if (!submission) {
+      throw new Error(`submission not found: ${submissionId}`);
+    }
+
+    const leaderboardResult = await client.query<{ best_submission_id: string }>(
+      `
+        SELECT best_submission_id
+        FROM leaderboard_entries
+        WHERE problem_id = $1
+          AND agent_id = $2
+        LIMIT 1
+      `,
+      [submission.problem_id, submission.agent_id]
+    );
+    const leaderboardEntry = leaderboardResult.rows[0];
+
+    if (leaderboardEntry?.best_submission_id === submissionId) {
+      const replacementResult = await client.query<{
+        id: string;
+        hidden_score: number;
+        shown_results_json: unknown;
+      }>(
+        `
+          SELECT
+            s.id,
+            (e.hidden_summary_json->>'score')::double precision AS hidden_score,
+            e.shown_results_json
+          FROM submissions s
+          JOIN LATERAL (
+            SELECT hidden_summary_json, shown_results_json
+            FROM evaluations
+            WHERE submission_id = s.id
+              AND eval_type = 'public'
+              AND status = 'completed'
+            ORDER BY created_at DESC
+            LIMIT 1
+          ) e ON TRUE
+          WHERE s.problem_id = $1
+            AND s.agent_id = $2
+            AND s.id <> $3
+            AND s.visible_after_eval = TRUE
+            AND s.status = 'completed'
+          ORDER BY hidden_score DESC, s.created_at ASC
+          LIMIT 1
+        `,
+        [submission.problem_id, submission.agent_id, submissionId]
+      );
+      const replacement = replacementResult.rows[0];
+
+      if (replacement) {
+        await client.query(
+          `
+            UPDATE leaderboard_entries
+            SET best_submission_id = $3,
+                best_hidden_score = $4,
+                shown_summary_json = $5::jsonb,
+                updated_at = NOW()
+            WHERE problem_id = $1
+              AND agent_id = $2
+          `,
+          [
+            submission.problem_id,
+            submission.agent_id,
+            replacement.id,
+            replacement.hidden_score,
+            JSON.stringify(replacement.shown_results_json)
+          ]
+        );
+      } else {
+        await client.query(
+          `
+            DELETE FROM leaderboard_entries
+            WHERE problem_id = $1
+              AND agent_id = $2
+          `,
+          [submission.problem_id, submission.agent_id]
+        );
+      }
+    }
+
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function disableAgent(pool: Pool, agentId: string): Promise<void> {
+  const result = await pool.query<{ id: string }>(
+    `
+      UPDATE agents
+      SET status = 'disabled'
+      WHERE id = $1
+      RETURNING id
+    `,
+    [agentId]
+  );
+
+  if (!result.rows[0]) {
+    throw new Error(`agent not found: ${agentId}`);
+  }
+
+  await pool.query(
+    `
+      UPDATE agent_tokens
+      SET revoked_at = COALESCE(revoked_at, NOW())
+      WHERE agent_id = $1
+    `,
+    [agentId]
+  );
 }
 
 export async function createDiscussionThread(

@@ -11,7 +11,9 @@ export const envSchema = z.object({
   RUNNER_TIMEOUT_SEC: z.coerce.number().positive().default(30),
   DATABASE_URL: z.string().url(),
   STORAGE_ROOT: z.string().min(1).default('storage'),
-  PROBLEMS_ROOT: z.string().min(1).default('examples/problems')
+  PROBLEMS_ROOT: z.string().min(1).default('examples/problems'),
+  ADMIN_USERNAME: z.string().min(1).default('admin'),
+  ADMIN_PASSWORD: z.string().min(1).default('llm-oj-admin')
 });
 
 export type RuntimeEnv = z.infer<typeof envSchema>;
