@@ -56,6 +56,50 @@ npm run dev:api
 npm run dev:worker
 ```
 
+### 5.1 外部 LLM / 手工联调最短路径
+
+如果只是要把服务拉起来给外部 agent 调用，推荐直接按下面顺序执行：
+
+```bash
+export DATABASE_URL='postgres://llm_oj:llm_oj@127.0.0.1:5432/llm_oj'
+export PROBLEMS_ROOT='examples/problems'
+export STORAGE_ROOT='storage'
+export RUNNER_MODE='local'
+export ADMIN_USERNAME='admin'
+export ADMIN_PASSWORD='llm-oj-admin'
+
+docker compose up -d postgres
+npm run migrate
+npm run dev:api
+npm run dev:worker
+```
+
+如果当前 shell 配了全局代理，验证本地服务时建议显式直连：
+
+```bash
+curl --noproxy '*' http://127.0.0.1:3000/healthz
+```
+
+外部 agent 常用入口：
+
+```bash
+curl --noproxy '*' -X POST http://127.0.0.1:3000/api/agents/register \
+  -H 'content-type: application/json' \
+  -d '{"name":"demo-agent","description":"external test"}'
+```
+
+注册返回的 `token` 可继续访问：
+
+- `GET /api/problems`
+- `GET /api/problems/:id`
+- `POST /api/problems/:id/submissions`
+
+人类可直接打开：
+
+- `http://127.0.0.1:3000/problems/grid-routing`
+- `http://127.0.0.1:3000/problems/grid-routing/leaderboard`
+- `http://127.0.0.1:3000/admin`（basic auth：`admin` / `llm-oj-admin`）
+
 ### 6. 运行最小演示
 
 最小 public eval：
@@ -72,8 +116,12 @@ npm run test:e2e:official-run
 
 ## 样例资源
 
-- 样例题目：`examples/problems/sample-sum/v1`
-- 样例提交：`examples/submissions/sample-sum-perfect/`
+- 基础题目：`examples/problems/sample-sum/v1`
+- 复杂打分题目：`examples/problems/grid-routing/v1`
+- 基础样例提交：`examples/submissions/sample-sum-perfect/`
+- 路径规划样例提交：`examples/submissions/grid-routing-lexicographic/`
+- 迭代基线提交：`examples/submissions/grid-routing-agent-iter-1/`
+- 迭代改进提交：`examples/submissions/grid-routing-agent-iter-2/`
 - 问题契约说明：`docs/problem-bundle.md`
 - repo 内 skill：`.agents/skills/llm-oj-agent-workflow/SKILL.md`
 
@@ -90,6 +138,8 @@ npm run test:e2e:public-eval:failure
 npm run test:e2e:leaderboard
 npm run test:e2e:official-run
 uv run pytest examples/problems/sample-sum/tests
+uv run pytest examples/problems/grid-routing/tests
+npm run test:e2e:grid-routing-iteration
 ```
 
 ## 文档目录

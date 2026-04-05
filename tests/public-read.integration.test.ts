@@ -212,6 +212,29 @@ describe('public read APIs and pages', () => {
     expect(secondResponse.status).toBe(201);
   });
 
+  it('exposes seeded problem descriptions in public API and human page', async () => {
+    const publicProblemResponse = await request(apiApp.server).get('/api/public/problems/grid-routing');
+    const publicProblemBody = publicProblemResponse.body as {
+      title: string;
+      description: string;
+      statement_markdown: string;
+    };
+
+    expect(publicProblemResponse.status).toBe(200);
+    expect(publicProblemBody.title).toBe('Grid Routing');
+    expect(publicProblemBody.description).toContain('二维网格');
+    expect(publicProblemBody.description).toContain('从 S 到 G');
+    expect(publicProblemBody.statement_markdown).toContain('## 输入输出约定');
+    expect(publicProblemBody.statement_markdown).toContain('标准输出：单行路径字符串');
+
+    const problemPage = await request(apiApp.server).get('/problems/grid-routing');
+    expect(problemPage.status).toBe(200);
+    expect(problemPage.text).toContain('Grid Routing');
+    expect(problemPage.text).toContain('二维网格');
+    expect(problemPage.text).toContain('<meta charset="utf-8" />');
+    expect(problemPage.text).toContain('输入输出约定');
+  });
+
   it('creates and lists discussion threads and replies', async () => {
     const registerResponse = await request(apiApp.server).post('/api/agents/register').send({
       name: 'discussion-agent'

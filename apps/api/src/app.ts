@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import Fastify from 'fastify';
@@ -101,6 +102,10 @@ function escapeHtml(value: string): string {
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;');
+}
+
+async function readStatementMarkdown(statementPath: string): Promise<string> {
+  return readFile(statementPath, 'utf8');
 }
 
 function serializeEvaluation(
@@ -286,6 +291,8 @@ export function createApiApp(options: CreateApiAppOptions) {
         });
       }
 
+      const statementMarkdown = await readStatementMarkdown(problem.statementPath);
+
       return reply.send({
         id: problem.problemId,
         slug: problem.slug,
@@ -295,7 +302,8 @@ export function createApiApp(options: CreateApiAppOptions) {
           id: problem.problemVersionId,
           version: problem.version
         },
-        spec: problem.specJson
+        spec: problem.specJson,
+        statement_markdown: statementMarkdown
       });
     }
   );
@@ -310,6 +318,8 @@ export function createApiApp(options: CreateApiAppOptions) {
       });
     }
 
+    const statementMarkdown = await readStatementMarkdown(problem.statementPath);
+
     return reply.send({
       id: problem.problemId,
       slug: problem.slug,
@@ -319,7 +329,8 @@ export function createApiApp(options: CreateApiAppOptions) {
         id: problem.problemVersionId,
         version: problem.version
       },
-      spec: problem.specJson
+      spec: problem.specJson,
+      statement_markdown: statementMarkdown
     });
   });
 
@@ -681,8 +692,12 @@ export function createApiApp(options: CreateApiAppOptions) {
   );
 
   app.get('/admin', { preHandler: requireAdminAuth }, async (_request, reply) => {
-    return reply.type('text/html').send(`<!doctype html>
+    return reply.type('text/html; charset=utf-8').send(`<!doctype html>
 <html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>Admin Console</title>
+  </head>
   <body>
     <h1>Admin Console</h1>
     <p>当前为极简 admin 管理页，直接列出可调用的 API。</p>
@@ -804,14 +819,25 @@ export function createApiApp(options: CreateApiAppOptions) {
     const problem = await getPublishedProblem(options.db, request.params.id);
 
     if (!problem) {
-      return reply.code(404).type('text/html').send('<h1>problem not found</h1>');
+      return reply
+        .code(404)
+        .type('text/html; charset=utf-8')
+        .send('<!doctype html><html lang="zh-CN"><head><meta charset="utf-8" /><title>problem not found</title></head><body><h1>problem not found</h1></body></html>');
     }
 
-    return reply.type('text/html').send(`<!doctype html>
+    const statementMarkdown = await readStatementMarkdown(problem.statementPath);
+
+    return reply.type('text/html; charset=utf-8').send(`<!doctype html>
 <html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>${escapeHtml(problem.title)}</title>
+  </head>
   <body>
     <h1>${escapeHtml(problem.title)}</h1>
     <p>problem: ${escapeHtml(problem.problemId)} / version: ${escapeHtml(problem.version)}</p>
+    ${problem.description ? `<p>${escapeHtml(problem.description)}</p>` : ''}
+    <pre>${escapeHtml(statementMarkdown)}</pre>
     <ul>
       <li><a href="/problems/${encodeURIComponent(problem.problemId)}/leaderboard">leaderboard</a></li>
       <li><a href="/problems/${encodeURIComponent(problem.problemId)}/discussions">discussion</a></li>
@@ -829,8 +855,12 @@ export function createApiApp(options: CreateApiAppOptions) {
       )
       .join('');
 
-    return reply.type('text/html').send(`<!doctype html>
+    return reply.type('text/html; charset=utf-8').send(`<!doctype html>
 <html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>Leaderboard</title>
+  </head>
   <body>
     <h1>Leaderboard</h1>
     <ul>${rows}</ul>
@@ -847,8 +877,12 @@ export function createApiApp(options: CreateApiAppOptions) {
       )
       .join('');
 
-    return reply.type('text/html').send(`<!doctype html>
+    return reply.type('text/html; charset=utf-8').send(`<!doctype html>
 <html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>Discussion</title>
+  </head>
   <body>
     <h1>Discussion</h1>
     ${rows}
@@ -860,11 +894,18 @@ export function createApiApp(options: CreateApiAppOptions) {
     const submission = await getSubmissionById(options.db, request.params.id);
 
     if (!submission || !submission.visibleAfterEval) {
-      return reply.code(404).type('text/html').send('<h1>submission not found</h1>');
+      return reply
+        .code(404)
+        .type('text/html; charset=utf-8')
+        .send('<!doctype html><html lang="zh-CN"><head><meta charset="utf-8" /><title>submission not found</title></head><body><h1>submission not found</h1></body></html>');
     }
 
-    return reply.type('text/html').send(`<!doctype html>
+    return reply.type('text/html; charset=utf-8').send(`<!doctype html>
 <html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>Submission ${escapeHtml(submission.id)}</title>
+  </head>
   <body>
     <h1>Submission ${escapeHtml(submission.id)}</h1>
     <p>status: ${escapeHtml(submission.status)}</p>

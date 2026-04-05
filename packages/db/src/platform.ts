@@ -1,4 +1,4 @@
-import { mkdir, readdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { existsSync } from 'node:fs';
 
@@ -250,6 +250,60 @@ function mapProblemRow(row: {
   };
 }
 
+function stripMarkdownInline(value: string): string {
+  return value
+    .replaceAll(/`([^`]+)`/g, '$1')
+    .replaceAll(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replaceAll(/\*\*([^*]+)\*\*/g, '$1')
+    .replaceAll(/\*([^*]+)\*/g, '$1')
+    .replaceAll(/_([^_]+)_/g, '$1')
+    .trim();
+}
+
+export async function extractProblemDescriptionFromStatement(statementPath: string): Promise<string> {
+  const content = await readFile(statementPath, 'utf8');
+  const lines = content.split(/\r?\n/);
+  const paragraph: string[] = [];
+  let inCodeBlock = false;
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+
+    if (line.startsWith('```')) {
+      inCodeBlock = !inCodeBlock;
+      continue;
+    }
+
+    if (inCodeBlock) {
+      continue;
+    }
+
+    if (!line) {
+      if (paragraph.length > 0) {
+        break;
+      }
+      continue;
+    }
+
+    if (
+      line.startsWith('#') ||
+      line.startsWith('-') ||
+      /^\d+\.\s/.test(line) ||
+      line.startsWith('>') ||
+      line.startsWith('|')
+    ) {
+      if (paragraph.length > 0) {
+        break;
+      }
+      continue;
+    }
+
+    paragraph.push(stripMarkdownInline(line));
+  }
+
+  return paragraph.join(' ').trim();
+}
+
 function mapEvaluationRow(row: {
   id: string | null;
   status: string | null;
@@ -418,6 +472,9 @@ export async function publishProblemVersion(
   input: PublishProblemVersionInput
 ): Promise<ProblemVersionRecord> {
   const validated = await validateProblemBundle(input.bundlePath);
+  const statementDescription = await extractProblemDescriptionFromStatement(
+    validated.paths.statementPath
+  );
 
   if (validated.spec.problem_id !== input.problemId) {
     throw new Error(
@@ -473,6 +530,7 @@ export async function publishProblemVersion(
       )
       UPDATE problems p
       SET title = $7,
+          description = CASE WHEN p.description = '' THEN $8 ELSE p.description END,
           status = 'active',
           updated_at = NOW()
       FROM upserted_version v
@@ -495,7 +553,8 @@ export async function publishProblemVersion(
       input.bundlePath,
       validated.paths.statementPath,
       JSON.stringify(validated.spec),
-      validated.spec.problem_title
+      validated.spec.problem_title,
+      statementDescription
     ]
   );
 
@@ -620,20 +679,22 @@ export async function ensureProblemsSeededFromRoot(
       }
 
       const validated = await validateProblemBundle(bundleDir);
+      const description = await extractProblemDescriptionFromStatement(validated.paths.statementPath);
       const problemId = validated.spec.problem_id;
       const versionId = `${problemId}:${validated.spec.problem_version}`;
 
       await pool.query(
         `
           INSERT INTO problems (id, slug, title, description, status)
-          VALUES ($1, $2, $3, '', 'active')
+          VALUES ($1, $2, $3, $4, 'active')
           ON CONFLICT (id) DO UPDATE
           SET slug = EXCLUDED.slug,
               title = EXCLUDED.title,
+              description = CASE WHEN problems.description = '' THEN EXCLUDED.description ELSE problems.description END,
               status = 'active',
               updated_at = NOW()
         `,
-        [problemId, problemId, validated.spec.problem_title]
+        [problemId, problemId, validated.spec.problem_title, description]
       );
 
       await pool.query(

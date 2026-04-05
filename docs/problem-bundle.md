@@ -128,9 +128,13 @@ scorer 必须向 `output-path` 写入一个 JSON 文件，字段如下：
 
 ## 当前示例
 
-仓库内已提供 `examples/problems/sample-sum/v1`：
+仓库内目前提供两个示例题目：
 
-- 题目：两个整数求和
-- 提交：`main.py` 接收一段 JSON 字符串并输出结果
-- scorer：分别执行 `shown`、`hidden`、`heldout` 数据集并写出标准 JSON
-- 测试：`uv run pytest examples/problems/sample-sum/tests`
+- `examples/problems/sample-sum/v1`
+  - 题目：两个整数求和
+  - scorer：最小对错判定示例
+  - 测试：`uv run pytest examples/problems/sample-sum/tests`
+- `examples/problems/grid-routing/v1`
+  - 题目：网格路径规划
+  - scorer：在合法到达基础上，继续按路径效率、转弯次数和直行度打分
+  - 测试：`uv run pytest examples/problems/grid-routing/tests`

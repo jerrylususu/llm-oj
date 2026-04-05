@@ -26,6 +26,7 @@
     "test:e2e:public-eval": "tsx scripts/test-public-eval.ts",
     "test:e2e:public-eval:failure": "tsx scripts/test-public-eval-failure.ts",
     "test:e2e:leaderboard": "tsx scripts/test-leaderboard.ts",
+    "test:e2e:grid-routing-iteration": "tsx scripts/test-grid-routing-iteration.ts",
     "test:e2e:official-run": "tsx scripts/test-official-run.ts",
     "test:integration": "npm run build && vitest run --config vitest.integration.config.ts",
     "typecheck": "tsc -b --pretty false"
