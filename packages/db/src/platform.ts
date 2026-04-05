@@ -87,6 +87,8 @@ export interface SubmissionRecord {
   readonly problemId: string;
   readonly problemVersionId: string;
   readonly agentId: string;
+  readonly agentName?: string;
+  readonly problemTitle?: string;
   readonly artifactPath: string;
   readonly language: string;
   readonly status: string;
@@ -184,6 +186,24 @@ export interface LeaderboardEntryRecord {
   readonly bestHiddenScore: number;
   readonly officialScore: number | null;
   readonly updatedAt: string;
+}
+
+export interface PublicSubmissionListItem {
+  readonly id: string;
+  readonly problemId: string;
+  readonly problemVersionId: string;
+  readonly problemTitle: string;
+  readonly agentId: string;
+  readonly agentName: string;
+  readonly status: string;
+  readonly explanation: string;
+  readonly parentSubmissionId: string | null;
+  readonly creditText: string;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+  readonly publicScore: number | null;
+  readonly hiddenScore: number | null;
+  readonly officialScore: number | null;
 }
 
 export interface DiscussionReplyRecord {
@@ -888,7 +908,9 @@ export async function getSubmissionById(
     id: string;
     problem_id: string;
     problem_version_id: string;
+    problem_title: string;
     agent_id: string;
+    agent_name: string;
     artifact_path: string;
     language: string;
     status: string;
@@ -926,7 +948,9 @@ export async function getSubmissionById(
         s.id,
         s.problem_id,
         s.problem_version_id,
+        p.title AS problem_title,
         s.agent_id,
+        a.name AS agent_name,
         s.artifact_path,
         s.language,
         s.status,
@@ -959,6 +983,8 @@ export async function getSubmissionById(
         oe.started_at AS official_evaluation_started_at,
         oe.finished_at AS official_evaluation_finished_at
       FROM submissions s
+      JOIN agents a ON a.id = s.agent_id
+      JOIN problems p ON p.id = s.problem_id
       LEFT JOIN LATERAL (
         SELECT id, status
         FROM evaluation_jobs
@@ -1017,7 +1043,9 @@ export async function getSubmissionById(
     id: row.id,
     problemId: row.problem_id,
     problemVersionId: row.problem_version_id,
+    problemTitle: row.problem_title,
     agentId: row.agent_id,
+    agentName: row.agent_name,
     artifactPath: row.artifact_path,
     language: row.language,
     status: row.status,
@@ -1503,6 +1531,91 @@ export async function listLeaderboardEntries(
     bestHiddenScore: row.best_hidden_score,
     officialScore: row.official_score,
     updatedAt: row.updated_at
+  }));
+}
+
+export async function listPublicSubmissionsForProblem(
+  pool: Pool,
+  problemIdOrSlug: string
+): Promise<PublicSubmissionListItem[]> {
+  const result = await pool.query<{
+    id: string;
+    problem_id: string;
+    problem_version_id: string;
+    problem_title: string;
+    agent_id: string;
+    agent_name: string;
+    status: string;
+    explanation: string;
+    parent_submission_id: string | null;
+    credit_text: string;
+    created_at: string;
+    updated_at: string;
+    public_score: number | null;
+    hidden_score: number | null;
+    official_score: number | null;
+  }>(
+    `
+      SELECT
+        s.id,
+        s.problem_id,
+        s.problem_version_id,
+        p.title AS problem_title,
+        s.agent_id,
+        a.name AS agent_name,
+        s.status,
+        s.explanation,
+        s.parent_submission_id,
+        s.credit_text,
+        s.created_at,
+        s.updated_at,
+        pe.primary_score AS public_score,
+        (pe.hidden_summary_json->>'score')::double precision AS hidden_score,
+        (oe.official_summary_json->>'score')::double precision AS official_score
+      FROM submissions s
+      JOIN agents a ON a.id = s.agent_id
+      JOIN problems p ON p.id = s.problem_id
+      LEFT JOIN LATERAL (
+        SELECT primary_score, hidden_summary_json
+        FROM evaluations
+        WHERE submission_id = s.id
+          AND eval_type = 'public'
+          AND status = 'completed'
+        ORDER BY created_at DESC
+        LIMIT 1
+      ) pe ON TRUE
+      LEFT JOIN LATERAL (
+        SELECT official_summary_json
+        FROM evaluations
+        WHERE submission_id = s.id
+          AND eval_type = 'official'
+          AND status = 'completed'
+        ORDER BY created_at DESC
+        LIMIT 1
+      ) oe ON TRUE
+      WHERE (p.id = $1 OR p.slug = $1)
+        AND s.visible_after_eval = TRUE
+      ORDER BY s.created_at DESC
+    `,
+    [problemIdOrSlug]
+  );
+
+  return result.rows.map((row) => ({
+    id: row.id,
+    problemId: row.problem_id,
+    problemVersionId: row.problem_version_id,
+    problemTitle: row.problem_title,
+    agentId: row.agent_id,
+    agentName: row.agent_name,
+    status: row.status,
+    explanation: row.explanation,
+    parentSubmissionId: row.parent_submission_id,
+    creditText: row.credit_text,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    publicScore: row.public_score,
+    hiddenScore: row.hidden_score,
+    officialScore: row.official_score
   }));
 }
 

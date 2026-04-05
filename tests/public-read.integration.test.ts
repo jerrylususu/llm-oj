@@ -174,9 +174,49 @@ describe('public read APIs and pages', () => {
     });
 
     const publicSubmission = await request(apiApp.server).get(`/api/public/submissions/${pendingId}`);
-    const publicSubmissionBody = publicSubmission.body as { visible_after_eval: boolean };
+    const publicSubmissionBody = publicSubmission.body as {
+      visible_after_eval: boolean;
+      agent_name: string;
+      parent_submission_id: string | null;
+      created_at: string;
+    };
     expect(publicSubmission.status).toBe(200);
     expect(publicSubmissionBody.visible_after_eval).toBe(true);
+    expect(publicSubmissionBody.agent_name).toBe('leader-a');
+    expect(publicSubmissionBody.parent_submission_id).toBe(null);
+    expect(publicSubmissionBody.created_at).toBeTruthy();
+
+    const publicSubmissionList = await request(apiApp.server).get(
+      '/api/public/problems/sample-sum/submissions'
+    );
+    const publicSubmissionListBody = publicSubmissionList.body as {
+      items: Array<{
+        id: string;
+        agent_name: string;
+        hidden_score: number;
+      }>;
+    };
+    expect(publicSubmissionList.status).toBe(200);
+    expect(publicSubmissionListBody.items).toHaveLength(2);
+    expect(publicSubmissionListBody.items.some((item) => item.id === pendingId)).toBe(true);
+    expect(publicSubmissionListBody.items.some((item) => item.agent_name === 'leader-a')).toBe(true);
+
+    const artifactResponse = await request(apiApp.server).get(
+      `/api/public/submissions/${pendingId}/artifact`
+    );
+    const artifactBody = artifactResponse.body as {
+      file_count: number;
+      files: Array<{
+        path: string;
+        language: string;
+        content: string | null;
+      }>;
+    };
+    expect(artifactResponse.status).toBe(200);
+    expect(artifactBody.file_count).toBe(1);
+    expect(artifactBody.files[0]?.path).toBe('main.py');
+    expect(artifactBody.files[0]?.language).toBe('python');
+    expect(artifactBody.files[0]?.content).toContain("payload['a'] + payload['b']");
 
     const leaderboardResponse = await request(apiApp.server).get(
       '/api/public/problems/sample-sum/leaderboard'
@@ -199,13 +239,25 @@ describe('public read APIs and pages', () => {
     expect(secondItem?.best_hidden_score).toBe(0);
 
     const problemPage = await request(apiApp.server).get('/problems/sample-sum');
+    const catalogPage = await request(apiApp.server).get('/');
+    const submissionsPage = await request(apiApp.server).get('/problems/sample-sum/submissions');
     const submissionPage = await request(apiApp.server).get(`/submissions/${pendingId}`);
     const leaderboardPage = await request(apiApp.server).get('/problems/sample-sum/leaderboard');
 
+    expect(catalogPage.status).toBe(200);
+    expect(catalogPage.text).toContain('Problem Catalog');
+    expect(catalogPage.text).toContain('sample-sum');
     expect(problemPage.status).toBe(200);
     expect(problemPage.text).toContain('Sample Sum');
+    expect(problemPage.text).toContain('recent public submissions');
+    expect(submissionsPage.status).toBe(200);
+    expect(submissionsPage.text).toContain('public submissions');
+    expect(submissionsPage.text).toContain('leader-a');
     expect(submissionPage.status).toBe(200);
     expect(submissionPage.text).toContain(pendingId);
+    expect(submissionPage.text).toContain('submission metadata');
+    expect(submissionPage.text).toContain('zip browser');
+    expect(submissionPage.text).toContain('main.py');
     expect(leaderboardPage.status).toBe(200);
     expect(leaderboardPage.text).toContain('leader-a');
 

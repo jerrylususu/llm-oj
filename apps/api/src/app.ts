@@ -3,8 +3,10 @@ import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
+import fastifyStatic from '@fastify/static';
 import Fastify from 'fastify';
 import type { FastifyReply, FastifyRequest } from 'fastify';
+import { marked } from 'marked';
 import type { Pool } from 'pg';
 import type { Logger } from 'pino';
 
@@ -26,6 +28,7 @@ import {
   registerAgent,
   createDiscussionReply,
   createDiscussionThread,
+  listPublicSubmissionsForProblem,
   storeSubmissionArtifact
 } from '@llm-oj/db';
 import {
@@ -34,6 +37,16 @@ import {
   parseBearerToken,
   type ServiceConfig
 } from '@llm-oj/shared';
+
+import { readSubmissionArtifactSummary } from './submission-artifact';
+import {
+  renderDiscussionPage,
+  renderLeaderboardPage,
+  renderProblemCatalogPage,
+  renderProblemPage,
+  renderSubmissionPage,
+  renderSubmissionsPage
+} from './ui';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -184,6 +197,11 @@ export function createApiApp(options: CreateApiAppOptions) {
   app.decorateRequest('agentAuth', null);
   (app as typeof app & { db: Pool }).db = options.db;
 
+  void app.register(fastifyStatic, {
+    root: path.resolve(process.cwd(), 'node_modules/monaco-editor/min'),
+    prefix: '/assets/monaco/'
+  });
+
   app.addHook('onReady', async () => {
     const problemsRoot = path.resolve(process.cwd(), options.config.env.PROBLEMS_ROOT);
 
@@ -202,6 +220,11 @@ export function createApiApp(options: CreateApiAppOptions) {
       environment: options.config.env.NODE_ENV,
       database
     };
+  });
+
+  app.get('/', async (_request, reply) => {
+    const problems = await listPublishedProblems(options.db);
+    return reply.type('text/html; charset=utf-8').send(renderProblemCatalogPage(problems));
   });
 
   async function requireAdminAuth(request: FastifyRequest, reply: FastifyReply): Promise<void> {
@@ -333,6 +356,33 @@ export function createApiApp(options: CreateApiAppOptions) {
       statement_markdown: statementMarkdown
     });
   });
+
+  app.get<{ Params: { id: string } }>(
+    '/api/public/problems/:id/submissions',
+    async (request, reply) => {
+      const items = await listPublicSubmissionsForProblem(options.db, request.params.id);
+
+      return reply.send({
+        items: items.map((item) => ({
+          id: item.id,
+          problem_id: item.problemId,
+          problem_version_id: item.problemVersionId,
+          problem_title: item.problemTitle,
+          agent_id: item.agentId,
+          agent_name: item.agentName,
+          status: item.status,
+          explanation: item.explanation,
+          parent_submission_id: item.parentSubmissionId,
+          credit_text: item.creditText,
+          public_score: item.publicScore,
+          hidden_score: item.hiddenScore,
+          official_score: item.officialScore,
+          created_at: item.createdAt,
+          updated_at: item.updatedAt
+        }))
+      });
+    }
+  );
 
   app.post<{ Body: CreateSubmissionBody }>(
     '/api/submissions',
@@ -468,16 +518,53 @@ export function createApiApp(options: CreateApiAppOptions) {
     return reply.send({
       id: submission.id,
       problem_id: submission.problemId,
+      problem_title: submission.problemTitle,
       problem_version_id: submission.problemVersionId,
       agent_id: submission.agentId,
+      agent_name: submission.agentName,
       status: submission.status,
       explanation: submission.explanation,
+      parent_submission_id: submission.parentSubmissionId,
+      credit_text: submission.creditText,
       visible_after_eval: submission.visibleAfterEval,
       evaluation: serializeEvaluation(submission.evaluation),
       public_evaluation: serializeEvaluation(submission.publicEvaluation),
-      official_evaluation: serializeEvaluation(submission.officialEvaluation)
+      official_evaluation: serializeEvaluation(submission.officialEvaluation),
+      created_at: submission.createdAt,
+      updated_at: submission.updatedAt
     });
   });
+
+  app.get<{ Params: { id: string } }>(
+    '/api/public/submissions/:id/artifact',
+    async (request, reply) => {
+      const submission = await getSubmissionById(options.db, request.params.id);
+
+      if (!submission || !submission.visibleAfterEval) {
+        return reply.code(404).send({
+          error: 'not_found',
+          message: 'submission 不存在或尚未公开'
+        });
+      }
+
+      const artifact = await readSubmissionArtifactSummary(submission.artifactPath);
+
+      return reply.send({
+        archive_name: artifact.archiveName,
+        archive_size: artifact.archiveSize,
+        file_count: artifact.fileCount,
+        total_uncompressed_size: artifact.totalUncompressedSize,
+        files: artifact.files.map((file) => ({
+          path: file.path,
+          size: file.size,
+          compressed_size: file.compressedSize,
+          language: file.language,
+          is_text: file.isText,
+          content: file.content
+        }))
+      });
+    }
+  );
 
   app.get<{ Params: { id: string } }>('/api/public/problems/:id/leaderboard', async (request, reply) => {
     const items = await listLeaderboardEntries(options.db, request.params.id);
@@ -826,68 +913,90 @@ export function createApiApp(options: CreateApiAppOptions) {
     }
 
     const statementMarkdown = await readStatementMarkdown(problem.statementPath);
+    const [statementHtml, submissions, leaderboard, discussions] = await Promise.all([
+      marked.parse(statementMarkdown),
+      listPublicSubmissionsForProblem(options.db, problem.problemId),
+      listLeaderboardEntries(options.db, problem.problemId),
+      listDiscussionThreads(options.db, problem.problemId)
+    ]);
 
-    return reply.type('text/html; charset=utf-8').send(`<!doctype html>
-<html lang="zh-CN">
-  <head>
-    <meta charset="utf-8" />
-    <title>${escapeHtml(problem.title)}</title>
-  </head>
-  <body>
-    <h1>${escapeHtml(problem.title)}</h1>
-    <p>problem: ${escapeHtml(problem.problemId)} / version: ${escapeHtml(problem.version)}</p>
-    ${problem.description ? `<p>${escapeHtml(problem.description)}</p>` : ''}
-    <pre>${escapeHtml(statementMarkdown)}</pre>
-    <ul>
-      <li><a href="/problems/${encodeURIComponent(problem.problemId)}/leaderboard">leaderboard</a></li>
-      <li><a href="/problems/${encodeURIComponent(problem.problemId)}/discussions">discussion</a></li>
-    </ul>
-  </body>
-</html>`);
+    return reply
+      .type('text/html; charset=utf-8')
+      .send(
+        renderProblemPage({
+          problem,
+          statementHtml,
+          submissions,
+          leaderboard,
+          discussions
+        })
+      );
+  });
+
+  app.get<{ Params: { id: string } }>('/problems/:id/submissions', async (request, reply) => {
+    const problem = await getPublishedProblem(options.db, request.params.id);
+
+    if (!problem) {
+      return reply
+        .code(404)
+        .type('text/html; charset=utf-8')
+        .send('<!doctype html><html lang="zh-CN"><head><meta charset="utf-8" /><title>problem not found</title></head><body><h1>problem not found</h1></body></html>');
+    }
+
+    const submissions = await listPublicSubmissionsForProblem(options.db, problem.problemId);
+
+    return reply
+      .type('text/html; charset=utf-8')
+      .send(
+        renderSubmissionsPage({
+          problem,
+          submissions
+        })
+      );
   });
 
   app.get<{ Params: { id: string } }>('/problems/:id/leaderboard', async (request, reply) => {
-    const items = await listLeaderboardEntries(options.db, request.params.id);
-    const rows = items
-      .map(
-        (item) =>
-          `<li>${escapeHtml(item.agentName)}: hidden ${item.bestHiddenScore}, official ${item.officialScore ?? 'n/a'} (submission ${escapeHtml(item.bestSubmissionId)})</li>`
-      )
-      .join('');
+    const problem = await getPublishedProblem(options.db, request.params.id);
 
-    return reply.type('text/html; charset=utf-8').send(`<!doctype html>
-<html lang="zh-CN">
-  <head>
-    <meta charset="utf-8" />
-    <title>Leaderboard</title>
-  </head>
-  <body>
-    <h1>Leaderboard</h1>
-    <ul>${rows}</ul>
-  </body>
-</html>`);
+    if (!problem) {
+      return reply
+        .code(404)
+        .type('text/html; charset=utf-8')
+        .send('<!doctype html><html lang="zh-CN"><head><meta charset="utf-8" /><title>problem not found</title></head><body><h1>problem not found</h1></body></html>');
+    }
+
+    const items = await listLeaderboardEntries(options.db, problem.problemId);
+
+    return reply
+      .type('text/html; charset=utf-8')
+      .send(
+        renderLeaderboardPage({
+          problem,
+          entries: items
+        })
+      );
   });
 
   app.get<{ Params: { id: string } }>('/problems/:id/discussions', async (request, reply) => {
-    const items = await listDiscussionThreads(options.db, request.params.id);
-    const rows = items
-      .map(
-        (thread) =>
-          `<article><h2>${escapeHtml(thread.title)}</h2><p>${escapeHtml(thread.body)}</p><small>${escapeHtml(thread.agentName)}</small></article>`
-      )
-      .join('');
+    const problem = await getPublishedProblem(options.db, request.params.id);
 
-    return reply.type('text/html; charset=utf-8').send(`<!doctype html>
-<html lang="zh-CN">
-  <head>
-    <meta charset="utf-8" />
-    <title>Discussion</title>
-  </head>
-  <body>
-    <h1>Discussion</h1>
-    ${rows}
-  </body>
-</html>`);
+    if (!problem) {
+      return reply
+        .code(404)
+        .type('text/html; charset=utf-8')
+        .send('<!doctype html><html lang="zh-CN"><head><meta charset="utf-8" /><title>problem not found</title></head><body><h1>problem not found</h1></body></html>');
+    }
+
+    const items = await listDiscussionThreads(options.db, problem.problemId);
+
+    return reply
+      .type('text/html; charset=utf-8')
+      .send(
+        renderDiscussionPage({
+          problem,
+          threads: items
+        })
+      );
   });
 
   app.get<{ Params: { id: string } }>('/submissions/:id', async (request, reply) => {
@@ -900,25 +1009,16 @@ export function createApiApp(options: CreateApiAppOptions) {
         .send('<!doctype html><html lang="zh-CN"><head><meta charset="utf-8" /><title>submission not found</title></head><body><h1>submission not found</h1></body></html>');
     }
 
-    return reply.type('text/html; charset=utf-8').send(`<!doctype html>
-<html lang="zh-CN">
-  <head>
-    <meta charset="utf-8" />
-    <title>Submission ${escapeHtml(submission.id)}</title>
-  </head>
-  <body>
-    <h1>Submission ${escapeHtml(submission.id)}</h1>
-    <p>status: ${escapeHtml(submission.status)}</p>
-    <p>problem: ${escapeHtml(submission.problemId)}</p>
-    <p>explanation: ${escapeHtml(submission.explanation)}</p>
-    <p>public hidden score: ${escapeHtml(
-      String((submission.publicEvaluation?.hiddenSummary as { score?: number } | null)?.score ?? 'n/a')
-    )}</p>
-    <p>official score: ${escapeHtml(
-      String((submission.officialEvaluation?.officialSummary as { score?: number } | null)?.score ?? 'n/a')
-    )}</p>
-  </body>
-</html>`);
+    const artifact = await readSubmissionArtifactSummary(submission.artifactPath);
+
+    return reply
+      .type('text/html; charset=utf-8')
+      .send(
+        renderSubmissionPage({
+          submission,
+          artifact
+        })
+      );
   });
 
   return app;
