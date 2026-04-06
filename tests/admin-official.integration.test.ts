@@ -21,7 +21,10 @@ const databaseUrl =
   process.env.TEST_DATABASE_URL ??
   process.env.DATABASE_URL ??
   'postgres://llm_oj:llm_oj@127.0.0.1:5432/llm_oj_test';
-const sampleBundleRoot = path.resolve(process.cwd(), 'examples/problems/sample-sum/v1');
+const sampleBundleRoot = path.resolve(
+  process.cwd(),
+  'examples/problems/sample-sum/v1'
+);
 const adminUser = 'admin';
 const adminPassword = 'secret';
 
@@ -144,14 +147,26 @@ describe('admin official run flow', () => {
   const workerLogger = createLogger(workerConfig, {}, { enabled: false });
 
   beforeAll(async () => {
-    storageRoot = await mkdtemp(path.join(os.tmpdir(), 'llm-oj-admin-storage-'));
-    workspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'llm-oj-admin-workspace-'));
-    problemsRoot = await mkdtemp(path.join(os.tmpdir(), 'llm-oj-admin-problems-'));
+    storageRoot = await mkdtemp(
+      path.join(os.tmpdir(), 'llm-oj-admin-storage-')
+    );
+    workspaceRoot = await mkdtemp(
+      path.join(os.tmpdir(), 'llm-oj-admin-workspace-')
+    );
+    problemsRoot = await mkdtemp(
+      path.join(os.tmpdir(), 'llm-oj-admin-problems-')
+    );
     bundleRoot = await mkdtemp(path.join(os.tmpdir(), 'llm-oj-admin-bundle-'));
     bundleDir = await createAdminBundle(bundleRoot);
 
-    Object.assign(apiConfig.env, { STORAGE_ROOT: storageRoot, PROBLEMS_ROOT: problemsRoot });
-    Object.assign(workerConfig.env, { STORAGE_ROOT: storageRoot, PROBLEMS_ROOT: problemsRoot });
+    Object.assign(apiConfig.env, {
+      STORAGE_ROOT: storageRoot,
+      PROBLEMS_ROOT: problemsRoot
+    });
+    Object.assign(workerConfig.env, {
+      STORAGE_ROOT: storageRoot,
+      PROBLEMS_ROOT: problemsRoot
+    });
 
     await db.query('DROP TABLE IF EXISTS discussion_replies');
     await db.query('DROP TABLE IF EXISTS discussion_threads');
@@ -178,10 +193,8 @@ describe('admin official run flow', () => {
     await rm(bundleRoot, { force: true, recursive: true });
   }, 60_000);
 
-  it(
-    'creates problems, runs official eval, rejudges, hides submissions and disables agents',
-    async () => {
-      const unauthorizedPage = await apiApp.inject({
+  it('creates problems, runs official eval, rejudges, hides submissions and disables agents', async () => {
+    const unauthorizedPage = await apiApp.inject({
       method: 'GET',
       url: '/admin'
     });
@@ -282,15 +295,23 @@ describe('admin official run flow', () => {
       url: '/api/public/problems/admin-sum/leaderboard'
     });
     const leaderboardBeforeBody = leaderboardBeforeOfficial.json<{
-      items: Array<{ agent_name: string; best_hidden_score: number; official_score: number | null }>;
+      items: Array<{
+        agent_name: string;
+        best_hidden_score: number;
+        official_score: number | null;
+      }>;
     }>();
     expect(leaderboardBeforeOfficial.statusCode).toBe(200);
     expect(leaderboardBeforeBody.items.map((item) => item.agent_name)).toEqual([
       'admin-agent-a',
       'admin-agent-b'
     ]);
-    expect(leaderboardBeforeBody.items.map((item) => item.best_hidden_score)).toEqual([1, 0]);
-    expect(leaderboardBeforeBody.items.map((item) => item.official_score)).toEqual([null, null]);
+    expect(
+      leaderboardBeforeBody.items.map((item) => item.best_hidden_score)
+    ).toEqual([1, 0]);
+    expect(
+      leaderboardBeforeBody.items.map((item) => item.official_score)
+    ).toEqual([null, null]);
 
     const officialRunResponse = await apiApp.inject({
       method: 'POST',
@@ -323,26 +344,38 @@ describe('admin official run flow', () => {
       method: 'GET',
       url: `/api/public/submissions/${submissionBId}`
     });
-    const publicSubmissionAfterOfficialBody = publicSubmissionAfterOfficial.json<{
-      public_evaluation: { hidden_summary: { score: number } };
-      official_evaluation: { official_summary: { score: number } };
-    }>();
+    const publicSubmissionAfterOfficialBody =
+      publicSubmissionAfterOfficial.json<{
+        public_evaluation: { hidden_summary: { score: number } };
+        official_evaluation: { official_summary: { score: number } };
+      }>();
     expect(publicSubmissionAfterOfficial.statusCode).toBe(200);
-    expect(publicSubmissionAfterOfficialBody.public_evaluation.hidden_summary.score).toBe(0);
-    expect(publicSubmissionAfterOfficialBody.official_evaluation.official_summary.score).toBe(1);
+    expect(
+      publicSubmissionAfterOfficialBody.public_evaluation.hidden_summary.score
+    ).toBe(0);
+    expect(
+      publicSubmissionAfterOfficialBody.official_evaluation.official_summary
+        .score
+    ).toBe(1);
 
     const leaderboardAfterOfficial = await apiApp.inject({
       method: 'GET',
       url: '/api/public/problems/admin-sum/leaderboard'
     });
     const leaderboardAfterBody = leaderboardAfterOfficial.json<{
-      items: Array<{ agent_name: string; best_hidden_score: number; official_score: number | null }>;
+      items: Array<{
+        agent_name: string;
+        best_hidden_score: number;
+        official_score: number | null;
+      }>;
     }>();
     expect(leaderboardAfterBody.items.map((item) => item.agent_name)).toEqual([
       'admin-agent-a',
       'admin-agent-b'
     ]);
-    expect(leaderboardAfterBody.items.map((item) => item.best_hidden_score)).toEqual([1, 0]);
+    expect(
+      leaderboardAfterBody.items.map((item) => item.best_hidden_score)
+    ).toEqual([1, 0]);
     expect(leaderboardAfterBody.items[1]?.official_score).toBe(1);
 
     const submissionPage = await apiApp.inject({
@@ -350,7 +383,9 @@ describe('admin official run flow', () => {
       url: `/submissions/${submissionBId}`
     });
     expect(submissionPage.statusCode).toBe(200);
-    expect(submissionPage.body).toContain('official score: 1');
+    expect(submissionPage.body).toContain('Official Score');
+    expect(submissionPage.body).toContain('official evaluation');
+    expect(submissionPage.body).toContain('official dataset summary');
 
     const rejudgeResponse = await apiApp.inject({
       method: 'POST',
@@ -379,8 +414,13 @@ describe('admin official run flow', () => {
       official_evaluation: { official_summary: { score: number } };
     }>();
     expect(publicSubmissionAfterRejudge.statusCode).toBe(200);
-    expect(publicSubmissionAfterRejudgeBody.public_evaluation.hidden_summary.score).toBe(0);
-    expect(publicSubmissionAfterRejudgeBody.official_evaluation.official_summary.score).toBe(1);
+    expect(
+      publicSubmissionAfterRejudgeBody.public_evaluation.hidden_summary.score
+    ).toBe(0);
+    expect(
+      publicSubmissionAfterRejudgeBody.official_evaluation.official_summary
+        .score
+    ).toBe(1);
 
     const hideResponse = await apiApp.inject({
       method: 'POST',
@@ -407,7 +447,9 @@ describe('admin official run flow', () => {
     }>();
     expect(leaderboardAfterHideBody.items).toHaveLength(1);
     expect(leaderboardAfterHideBody.items[0]?.agent_name).toBe('admin-agent-b');
-    expect(leaderboardAfterHideBody.items[0]?.best_submission_id).toBe(submissionBId);
+    expect(leaderboardAfterHideBody.items[0]?.best_submission_id).toBe(
+      submissionBId
+    );
 
     const disableResponse = await apiApp.inject({
       method: 'POST',
@@ -427,7 +469,5 @@ describe('admin official run flow', () => {
       }
     });
     expect(disabledAgentAccess.statusCode).toBe(401);
-    },
-    60_000
-  );
+  }, 60_000);
 });

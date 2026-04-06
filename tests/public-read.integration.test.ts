@@ -8,7 +8,11 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import request from 'supertest';
 
 import { createApiApp } from '@llm-oj/api';
-import { createDatabasePool, defaultMigrationsDir, runMigrations } from '@llm-oj/db';
+import {
+  createDatabasePool,
+  defaultMigrationsDir,
+  runMigrations
+} from '@llm-oj/db';
 import { createLogger, createServiceConfig } from '@llm-oj/shared';
 import { runWorkerCycle } from '@llm-oj/worker';
 
@@ -23,8 +27,14 @@ async function createSubmissionZipBase64(
   workspaceRoot: string,
   expression: string
 ): Promise<string> {
-  const sourceDir = path.join(workspaceRoot, `submission-${expression.replaceAll(/[^a-z]/gi, '')}`);
-  const zipPath = path.join(workspaceRoot, `${expression.replaceAll(/[^a-z]/gi, '')}.zip`);
+  const sourceDir = path.join(
+    workspaceRoot,
+    `submission-${expression.replaceAll(/[^a-z]/gi, '')}`
+  );
+  const zipPath = path.join(
+    workspaceRoot,
+    `${expression.replaceAll(/[^a-z]/gi, '')}.zip`
+  );
 
   await mkdir(sourceDir, { recursive: true });
   await writeFile(
@@ -103,8 +113,12 @@ describe('public read APIs and pages', () => {
   });
 
   beforeAll(async () => {
-    storageRoot = await mkdtemp(path.join(os.tmpdir(), 'llm-oj-public-read-storage-'));
-    workspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'llm-oj-public-read-workspace-'));
+    storageRoot = await mkdtemp(
+      path.join(os.tmpdir(), 'llm-oj-public-read-storage-')
+    );
+    workspaceRoot = await mkdtemp(
+      path.join(os.tmpdir(), 'llm-oj-public-read-workspace-')
+    );
     Object.assign(apiConfig.env, { STORAGE_ROOT: storageRoot });
     Object.assign(workerConfig.env, { STORAGE_ROOT: storageRoot });
 
@@ -132,12 +146,22 @@ describe('public read APIs and pages', () => {
   });
 
   it('keeps submissions private before eval and exposes them after eval, with leaderboard ordering', async () => {
-    const agentA = await request(apiApp.server).post('/api/agents/register').send({ name: 'leader-a' });
-    const agentB = await request(apiApp.server).post('/api/agents/register').send({ name: 'leader-b' });
+    const agentA = await request(apiApp.server)
+      .post('/api/agents/register')
+      .send({ name: 'leader-a' });
+    const agentB = await request(apiApp.server)
+      .post('/api/agents/register')
+      .send({ name: 'leader-b' });
     const tokenA = (agentA.body as { token: string }).token;
     const tokenB = (agentB.body as { token: string }).token;
-    const goodArtifact = await createSubmissionZipBase64(workspaceRoot, "payload['a'] + payload['b']");
-    const badArtifact = await createSubmissionZipBase64(workspaceRoot, "payload['a'] - payload['b']");
+    const goodArtifact = await createSubmissionZipBase64(
+      workspaceRoot,
+      "payload['a'] + payload['b']"
+    );
+    const badArtifact = await createSubmissionZipBase64(
+      workspaceRoot,
+      "payload['a'] - payload['b']"
+    );
 
     const pendingResponse = await request(apiApp.server)
       .post('/api/submissions')
@@ -149,7 +173,9 @@ describe('public read APIs and pages', () => {
       });
     const pendingId = (pendingResponse.body as { id: string }).id;
 
-    const hiddenBefore = await request(apiApp.server).get(`/api/public/submissions/${pendingId}`);
+    const hiddenBefore = await request(apiApp.server).get(
+      `/api/public/submissions/${pendingId}`
+    );
     expect(hiddenBefore.status).toBe(404);
 
     await runWorkerCycle({
@@ -173,7 +199,9 @@ describe('public read APIs and pages', () => {
       logger: createLogger(workerConfig, {}, { enabled: false })
     });
 
-    const publicSubmission = await request(apiApp.server).get(`/api/public/submissions/${pendingId}`);
+    const publicSubmission = await request(apiApp.server).get(
+      `/api/public/submissions/${pendingId}`
+    );
     const publicSubmissionBody = publicSubmission.body as {
       visible_after_eval: boolean;
       agent_name: string;
@@ -198,8 +226,14 @@ describe('public read APIs and pages', () => {
     };
     expect(publicSubmissionList.status).toBe(200);
     expect(publicSubmissionListBody.items).toHaveLength(2);
-    expect(publicSubmissionListBody.items.some((item) => item.id === pendingId)).toBe(true);
-    expect(publicSubmissionListBody.items.some((item) => item.agent_name === 'leader-a')).toBe(true);
+    expect(
+      publicSubmissionListBody.items.some((item) => item.id === pendingId)
+    ).toBe(true);
+    expect(
+      publicSubmissionListBody.items.some(
+        (item) => item.agent_name === 'leader-a'
+      )
+    ).toBe(true);
 
     const artifactResponse = await request(apiApp.server).get(
       `/api/public/submissions/${pendingId}/artifact`
@@ -216,7 +250,9 @@ describe('public read APIs and pages', () => {
     expect(artifactBody.file_count).toBe(1);
     expect(artifactBody.files[0]?.path).toBe('main.py');
     expect(artifactBody.files[0]?.language).toBe('python');
-    expect(artifactBody.files[0]?.content).toContain("payload['a'] + payload['b']");
+    expect(artifactBody.files[0]?.content).toContain(
+      "payload['a'] + payload['b']"
+    );
 
     const leaderboardResponse = await request(apiApp.server).get(
       '/api/public/problems/sample-sum/leaderboard'
@@ -238,11 +274,19 @@ describe('public read APIs and pages', () => {
     expect(secondItem?.agent_name).toBe('leader-b');
     expect(secondItem?.best_hidden_score).toBe(0);
 
-    const problemPage = await request(apiApp.server).get('/problems/sample-sum');
+    const problemPage = await request(apiApp.server).get(
+      '/problems/sample-sum'
+    );
     const catalogPage = await request(apiApp.server).get('/');
-    const submissionsPage = await request(apiApp.server).get('/problems/sample-sum/submissions');
-    const submissionPage = await request(apiApp.server).get(`/submissions/${pendingId}`);
-    const leaderboardPage = await request(apiApp.server).get('/problems/sample-sum/leaderboard');
+    const submissionsPage = await request(apiApp.server).get(
+      '/problems/sample-sum/submissions'
+    );
+    const submissionPage = await request(apiApp.server).get(
+      `/submissions/${pendingId}`
+    );
+    const leaderboardPage = await request(apiApp.server).get(
+      '/problems/sample-sum/leaderboard'
+    );
 
     expect(catalogPage.status).toBe(200);
     expect(catalogPage.text).toContain('Problem Catalog');
@@ -256,6 +300,9 @@ describe('public read APIs and pages', () => {
     expect(submissionPage.status).toBe(200);
     expect(submissionPage.text).toContain(pendingId);
     expect(submissionPage.text).toContain('submission metadata');
+    expect(submissionPage.text).toContain('submission overview');
+    expect(submissionPage.text).toContain('Public Score');
+    expect(submissionPage.text).toContain('shown case breakdown');
     expect(submissionPage.text).toContain('zip browser');
     expect(submissionPage.text).toContain('main.py');
     expect(leaderboardPage.status).toBe(200);
@@ -265,7 +312,9 @@ describe('public read APIs and pages', () => {
   });
 
   it('exposes seeded problem descriptions in public API and human page', async () => {
-    const publicProblemResponse = await request(apiApp.server).get('/api/public/problems/grid-routing');
+    const publicProblemResponse = await request(apiApp.server).get(
+      '/api/public/problems/grid-routing'
+    );
     const publicProblemBody = publicProblemResponse.body as {
       title: string;
       description: string;
@@ -277,9 +326,13 @@ describe('public read APIs and pages', () => {
     expect(publicProblemBody.description).toContain('二维网格');
     expect(publicProblemBody.description).toContain('从 S 到 G');
     expect(publicProblemBody.statement_markdown).toContain('## 输入输出约定');
-    expect(publicProblemBody.statement_markdown).toContain('标准输出：单行路径字符串');
+    expect(publicProblemBody.statement_markdown).toContain(
+      '标准输出：单行路径字符串'
+    );
 
-    const problemPage = await request(apiApp.server).get('/problems/grid-routing');
+    const problemPage = await request(apiApp.server).get(
+      '/problems/grid-routing'
+    );
     expect(problemPage.status).toBe(200);
     expect(problemPage.text).toContain('Grid Routing');
     expect(problemPage.text).toContain('二维网格');
@@ -288,9 +341,11 @@ describe('public read APIs and pages', () => {
   });
 
   it('creates and lists discussion threads and replies', async () => {
-    const registerResponse = await request(apiApp.server).post('/api/agents/register').send({
-      name: 'discussion-agent'
-    });
+    const registerResponse = await request(apiApp.server)
+      .post('/api/agents/register')
+      .send({
+        name: 'discussion-agent'
+      });
     const token = (registerResponse.body as { token: string }).token;
 
     const threadResponse = await request(apiApp.server)
@@ -327,7 +382,9 @@ describe('public read APIs and pages', () => {
     expect(firstDiscussion?.title).toBe('How to improve score?');
     expect(firstDiscussion?.replies).toHaveLength(1);
 
-    const discussionPage = await request(apiApp.server).get('/problems/sample-sum/discussions');
+    const discussionPage = await request(apiApp.server).get(
+      '/problems/sample-sum/discussions'
+    );
     expect(discussionPage.status).toBe(200);
     expect(discussionPage.text).toContain('How to improve score?');
   });

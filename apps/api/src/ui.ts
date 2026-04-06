@@ -48,6 +48,7 @@ function renderPage(
     readonly description?: string;
     readonly extraHead?: string;
     readonly extraScripts?: string;
+    readonly titleClass?: string;
   } = {}
 ): string {
   return `<!doctype html>
@@ -151,6 +152,13 @@ function renderPage(
         max-width: 10ch;
       }
 
+      .title-wide {
+        max-width: none;
+        font-size: clamp(1.85rem, 2.45vw, 2.9rem);
+        line-height: 1.04;
+        overflow-wrap: anywhere;
+      }
+
       .lede {
         color: var(--muted);
         max-width: 70ch;
@@ -185,7 +193,11 @@ function renderPage(
 
       .catalog-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 16px;
+      }
+
+      .problem-list {
+        display: grid;
         gap: 16px;
       }
 
@@ -250,6 +262,17 @@ function renderPage(
         display: grid;
         gap: 14px;
         min-height: 220px;
+      }
+
+      .problem-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1.6fr) minmax(260px, 0.9fr);
+        gap: 20px;
+        align-items: start;
+      }
+
+      .problem-row .problem-card {
+        min-height: auto;
       }
 
       .problem-card:hover,
@@ -360,8 +383,8 @@ function renderPage(
       }
 
       .key-row {
-        display: flex;
-        justify-content: space-between;
+        display: grid;
+        grid-template-columns: minmax(120px, 180px) minmax(0, 1fr);
         gap: 12px;
         padding-bottom: 10px;
         border-bottom: 1px dashed var(--panel-border);
@@ -369,6 +392,75 @@ function renderPage(
 
       .key-row span:first-child {
         color: var(--muted);
+      }
+
+      .key-row strong,
+      .key-row code {
+        overflow-wrap: anywhere;
+      }
+
+      .key-row strong:last-child,
+      .key-row code:last-child {
+        text-align: left;
+      }
+
+      .submission-overview {
+        display: grid;
+        gap: 18px;
+      }
+
+      .submission-heading {
+        display: grid;
+        gap: 10px;
+      }
+
+      .submission-id {
+        font-family: var(--font-mono);
+        font-size: 1rem;
+        overflow-wrap: anywhere;
+        color: var(--text);
+      }
+
+      .summary-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 16px;
+      }
+
+      .evaluation-layout {
+        display: grid;
+        gap: 14px;
+      }
+
+      .evaluation-note {
+        color: var(--muted);
+        font-size: 0.9rem;
+        line-height: 1.6;
+      }
+
+      .evaluation-table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      .evaluation-table th,
+      .evaluation-table td {
+        text-align: left;
+        padding: 10px 8px;
+        border-bottom: 1px solid var(--panel-border);
+        vertical-align: top;
+      }
+
+      .evaluation-table th {
+        color: var(--muted);
+        font-size: 0.78rem;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        font-weight: 600;
+      }
+
+      .evaluation-table td:last-child {
+        min-width: 18ch;
       }
 
       .thread-card,
@@ -451,6 +543,10 @@ function renderPage(
         .span-8, .span-7, .span-6, .span-5, .span-4 { grid-column: span 12; }
         .viewer-shell { grid-template-columns: 1fr; min-height: auto; }
         .masthead { flex-direction: column; }
+        .problem-row,
+        .summary-grid {
+          grid-template-columns: 1fr;
+        }
       }
     </style>
     ${options.extraHead ?? ''}
@@ -460,7 +556,7 @@ function renderPage(
       <header class="masthead">
         <div>
           <div class="eyebrow">${escapeHtml(eyebrow)}</div>
-          <h1>${escapeHtml(title)}</h1>
+          <h1${options.titleClass ? ` class="${escapeHtml(options.titleClass)}"` : ''}>${escapeHtml(title)}</h1>
           ${
             options.description
               ? `<p class="lede">${escapeHtml(options.description)}</p>`
@@ -495,33 +591,37 @@ function renderPage(
 </html>`;
 }
 
-function renderProblemCards(problems: readonly ProblemVersionRecord[]): string {
+function renderProblemList(problems: readonly ProblemVersionRecord[]): string {
   return problems
     .map(
       (problem) => `
-        <a class="card-link" href="/problems/${encodeURIComponent(problem.problemId)}">
-          <article class="panel problem-card">
+        <article class="panel soft problem-row">
+          <div class="problem-card">
             <div class="mini-stack">
               <div class="eyebrow">problem / ${escapeHtml(problem.version)}</div>
-              <h2>${escapeHtml(problem.title)}</h2>
+              <h2><a href="/problems/${encodeURIComponent(problem.problemId)}">${escapeHtml(problem.title)}</a></h2>
             </div>
             <p class="subtle">${escapeHtml(problem.description || '暂无摘要')}</p>
+          </div>
+          <div class="stack">
             <div class="chip-row">
               <span class="chip"><strong>id</strong> ${escapeHtml(problem.problemId)}</span>
-              <span class="chip"><strong>version</strong> ${escapeHtml(problem.problemVersionId)}</span>
+              <span class="chip"><strong>bundle</strong> ${escapeHtml(problem.problemVersionId)}</span>
             </div>
             <div class="inline-meta">
-              <span><a href="/problems/${encodeURIComponent(problem.problemId)}">题面</a></span>
-              <span><a href="/problems/${encodeURIComponent(problem.problemId)}/submissions">提交</a></span>
-              <span><a href="/problems/${encodeURIComponent(problem.problemId)}/leaderboard">榜单</a></span>
+              <a href="/problems/${encodeURIComponent(problem.problemId)}">题面</a>
+              <a href="/problems/${encodeURIComponent(problem.problemId)}/submissions">提交</a>
+              <a href="/problems/${encodeURIComponent(problem.problemId)}/leaderboard">榜单</a>
             </div>
-          </article>
-        </a>`
+          </div>
+        </article>`
     )
     .join('');
 }
 
-export function renderProblemCatalogPage(problems: readonly ProblemVersionRecord[]): string {
+export function renderProblemCatalogPage(
+  problems: readonly ProblemVersionRecord[]
+): string {
   return renderPage(
     'Problem Catalog',
     'llm-oj',
@@ -534,7 +634,9 @@ export function renderProblemCatalogPage(problems: readonly ProblemVersionRecord
         </div>
       </div>
       <div class="catalog-grid span-12">
-        ${renderProblemCards(problems)}
+        <div class="problem-list">
+          ${renderProblemList(problems)}
+        </div>
       </div>
     </section>`,
     {
@@ -814,10 +916,128 @@ function renderSubmissionMetadata(submission: SubmissionRecord): string {
   </div>`;
 }
 
-function renderEvaluationJson(title: string, value: unknown): string {
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function asCaseResults(value: unknown): Array<Record<string, unknown>> {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.filter(
+    (entry): entry is Record<string, unknown> =>
+      Boolean(entry) && typeof entry === 'object' && !Array.isArray(entry)
+  );
+}
+
+function averageScore(results: Array<Record<string, unknown>>): number | null {
+  const scores = results
+    .map((result) => result.score)
+    .filter((score): score is number => typeof score === 'number');
+
+  if (scores.length === 0) {
+    return null;
+  }
+
+  return Number(
+    (scores.reduce((sum, score) => sum + score, 0) / scores.length).toFixed(4)
+  );
+}
+
+function renderAggregateSummary(
+  title: string,
+  summary: Record<string, unknown> | null,
+  emptyText: string
+): string {
+  if (!summary) {
+    return `<section class="panel soft">
+      <div class="eyebrow">${escapeHtml(title)}</div>
+      <div class="empty-state">${escapeHtml(emptyText)}</div>
+    </section>`;
+  }
+
   return `<section class="panel soft">
     <div class="eyebrow">${escapeHtml(title)}</div>
-    <pre>${escapeHtml(JSON.stringify(value, null, 2))}</pre>
+    <div class="key-list">
+      <div class="key-row"><span>score</span><strong>${formatScore(typeof summary.score === 'number' ? summary.score : null)}</strong></div>
+      <div class="key-row"><span>passed</span><strong>${escapeHtml(summary.passed ?? '-')}</strong></div>
+      <div class="key-row"><span>total</span><strong>${escapeHtml(summary.total ?? '-')}</strong></div>
+    </div>
+  </section>`;
+}
+
+function renderEvaluationSection(
+  title: string,
+  evaluation:
+    | SubmissionRecord['publicEvaluation']
+    | SubmissionRecord['officialEvaluation'],
+  options: {
+    readonly primaryLabel: string;
+    readonly helperText?: string;
+  }
+): string {
+  if (!evaluation) {
+    return `<section class="panel soft">
+      <div class="eyebrow">${escapeHtml(title)}</div>
+      <div class="empty-state">当前还没有这类评测结果。</div>
+    </section>`;
+  }
+
+  const shownResults = asCaseResults(evaluation.shownResults);
+  const hiddenSummary = asRecord(evaluation.hiddenSummary);
+  const officialSummary = asRecord(evaluation.officialSummary);
+  const shownAverage = averageScore(shownResults);
+  const shownRows = shownResults
+    .map(
+      (result) => `
+        <tr>
+          <td>${escapeHtml(result.case_id ?? '-')}</td>
+          <td>${escapeHtml(result.status ?? '-')}</td>
+          <td>${formatScore(typeof result.score === 'number' ? result.score : null)}</td>
+          <td>${escapeHtml(result.message ?? '-')}</td>
+        </tr>`
+    )
+    .join('');
+
+  return `<section class="panel soft evaluation-layout">
+    <div class="mini-stack">
+      <div class="eyebrow">${escapeHtml(title)}</div>
+      ${
+        options.helperText
+          ? `<div class="evaluation-note">${escapeHtml(options.helperText)}</div>`
+          : ''
+      }
+    </div>
+    <div class="kpi-grid">
+      <div class="kpi"><div class="kpi-label">${escapeHtml(options.primaryLabel)}</div><div class="kpi-value">${formatScore(evaluation.primaryScore)}</div></div>
+      <div class="kpi"><div class="kpi-label">Shown Average</div><div class="kpi-value">${formatScore(shownAverage)}</div></div>
+      <div class="kpi"><div class="kpi-label">Status</div><div class="kpi-value">${escapeHtml(evaluation.status)}</div></div>
+      <div class="kpi"><div class="kpi-label">Eval Type</div><div class="kpi-value">${escapeHtml(evaluation.evalType)}</div></div>
+    </div>
+    <div class="summary-grid">
+      ${renderAggregateSummary('hidden dataset summary', hiddenSummary, '当前评测没有 hidden summary。')}
+      ${renderAggregateSummary('official dataset summary', officialSummary, '当前评测没有 official summary。')}
+    </div>
+    <section class="panel soft">
+      <div class="eyebrow">run metadata</div>
+      <div class="key-list">
+        <div class="key-row"><span>evaluation id</span><code>${escapeHtml(evaluation.id)}</code></div>
+        <div class="key-row"><span>started at</span><strong>${escapeHtml(evaluation.startedAt ?? '-')}</strong></div>
+        <div class="key-row"><span>finished at</span><strong>${escapeHtml(evaluation.finishedAt ?? '-')}</strong></div>
+        <div class="key-row"><span>log path</span><code>${escapeHtml(evaluation.logPath ?? '-')}</code></div>
+      </div>
+    </section>
+    <section class="panel soft">
+      <div class="eyebrow">shown case breakdown</div>
+      ${
+        shownResults.length === 0
+          ? '<div class="empty-state">当前评测没有公开 shown case 明细。</div>'
+          : `<table class="evaluation-table"><thead><tr><th>Case</th><th>Status</th><th>Score</th><th>Message</th></tr></thead><tbody>${shownRows}</tbody></table>`
+      }
+    </section>
   </section>`;
 }
 
@@ -852,7 +1072,7 @@ export function renderSubmissionPage(input: {
     .join('');
 
   return renderPage(
-    `Submission ${input.submission.id.slice(0, 8)}…`,
+    `Submission ${input.submission.id}`,
     `submission / ${input.submission.problemId}`,
     `<section class="grid">
       <div class="panel span-12 soft">
@@ -862,10 +1082,22 @@ export function renderSubmissionPage(input: {
           <a href="/problems/${encodeURIComponent(input.submission.problemId)}/leaderboard">查看排行榜</a>
         </div>
       </div>
-      <aside class="panel span-4 stack">
-        <div class="eyebrow">submission metadata</div>
-        ${renderSubmissionMetadata(input.submission)}
-        <section class="panel soft">
+      <section class="panel span-12 submission-overview">
+        <div class="submission-heading">
+          <div class="eyebrow">submission overview</div>
+          <div class="submission-id">${escapeHtml(input.submission.id)}</div>
+          <div class="chip-row">
+            <span class="chip"><strong>problem</strong> ${escapeHtml(input.submission.problemTitle ?? input.submission.problemId)}</span>
+            <span class="chip"><strong>agent</strong> ${escapeHtml(input.submission.agentName ?? input.submission.agentId)}</span>
+            <span class="chip"><strong>status</strong> ${escapeHtml(input.submission.status)}</span>
+          </div>
+        </div>
+        <div class="summary-grid">
+          <section class="panel soft">
+            <div class="eyebrow">submission metadata</div>
+            ${renderSubmissionMetadata(input.submission)}
+          </section>
+          <section class="panel soft">
           <div class="eyebrow">artifact summary</div>
           <div class="artifact-meta mini-stack">
             <div><strong>${escapeHtml(input.artifact.archiveName)}</strong></div>
@@ -873,9 +1105,10 @@ export function renderSubmissionPage(input: {
             <div>files: ${input.artifact.fileCount}</div>
             <div>uncompressed: ${formatBytes(input.artifact.totalUncompressedSize)}</div>
           </div>
-        </section>
-      </aside>
-      <div class="span-8 stack">
+          </section>
+        </div>
+      </section>
+      <div class="span-12 stack">
         <section class="panel">
           <div class="eyebrow">explanation</div>
           <p class="subtle">${escapeHtml(input.submission.explanation || '提交未填写 explanation。')}</p>
@@ -883,12 +1116,31 @@ export function renderSubmissionPage(input: {
         <section class="panel">
           <div class="eyebrow">scores</div>
           <div class="kpi-grid">
-            <div class="kpi"><div class="kpi-label">Public Primary</div><div class="kpi-value">${formatScore(input.submission.publicEvaluation?.primaryScore)}</div></div>
-            <div class="kpi"><div class="kpi-label">Hidden Score</div><div class="kpi-value">${formatScore((input.submission.publicEvaluation?.hiddenSummary as { score?: number } | null)?.score)}</div></div>
+            <div class="kpi"><div class="kpi-label">Public Score</div><div class="kpi-value">${formatScore(input.submission.publicEvaluation?.primaryScore)}</div></div>
+            <div class="kpi"><div class="kpi-label">Shown Average</div><div class="kpi-value">${formatScore(averageScore(asCaseResults(input.submission.publicEvaluation?.shownResults)))}</div></div>
             <div class="kpi"><div class="kpi-label">Official Score</div><div class="kpi-value">${formatScore((input.submission.officialEvaluation?.officialSummary as { score?: number } | null)?.score)}</div></div>
             <div class="kpi"><div class="kpi-label">Visible</div><div class="kpi-value">${input.submission.visibleAfterEval ? 'yes' : 'no'}</div></div>
           </div>
+          <p class="evaluation-note">当前 public score 取评测结果里的 primary score。对现有题包来说，它通常等于 hidden dataset summary；shown cases 主要用于解释路径质量，不直接决定排行榜。</p>
         </section>
+        ${renderEvaluationSection(
+          'public evaluation',
+          input.submission.publicEvaluation,
+          {
+            primaryLabel: 'Public Score',
+            helperText:
+              'shown cases 用于解释和调试，当前 public score 通常取 hidden dataset aggregate。'
+          }
+        )}
+        ${renderEvaluationSection(
+          'official evaluation',
+          input.submission.officialEvaluation,
+          {
+            primaryLabel: 'Official Primary',
+            helperText:
+              'official run 走 heldout 数据集，结果单独展示，不直接覆盖实时排行榜。'
+          }
+        )}
         <section class="panel">
           <div class="eyebrow">zip browser</div>
           ${
@@ -903,12 +1155,11 @@ export function renderSubmissionPage(input: {
                 </div>`
           }
         </section>
-        ${renderEvaluationJson('public evaluation', input.submission.publicEvaluation)}
-        ${renderEvaluationJson('official evaluation', input.submission.officialEvaluation)}
       </div>
     </section>`,
     {
       description: input.submission.problemTitle,
+      titleClass: 'title-wide',
       extraHead:
         input.artifact.files.length === 0
           ? ''

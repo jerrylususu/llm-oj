@@ -21,8 +21,8 @@ const databaseUrl =
   'postgres://llm_oj:llm_oj@127.0.0.1:5432/llm_oj_test';
 const problemsRoot = path.resolve(process.cwd(), 'examples/problems');
 const emptyZipBase64 = Buffer.from([
-  0x50, 0x4b, 0x05, 0x06, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+  0x50, 0x4b, 0x05, 0x06, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
 ]).toString('base64');
 
 interface RegisterAgentResponse {
@@ -102,15 +102,17 @@ describe('agent registration and submissions', () => {
   });
 
   it('registers an agent and requires bearer auth for problem access', async () => {
-    const registerResponse = await request(app.server).post('/api/agents/register').send({
-      name: 'agent-alpha',
-      description: 'first agent',
-      owner: 'integration-suite',
-      model_info: {
-        provider: 'openai',
-        model: 'gpt-test'
-      }
-    });
+    const registerResponse = await request(app.server)
+      .post('/api/agents/register')
+      .send({
+        name: 'agent-alpha',
+        description: 'first agent',
+        owner: 'integration-suite',
+        model_info: {
+          provider: 'openai',
+          model: 'gpt-test'
+        }
+      });
     const registerBody = registerResponse.body as RegisterAgentResponse;
 
     expect(registerResponse.status).toBe(201);
@@ -131,17 +133,26 @@ describe('agent registration and submissions', () => {
     const problemsBody = problemsResponse.body as ProblemListResponse;
 
     expect(problemsResponse.status).toBe(200);
-    expect(problemsBody.items).toHaveLength(1);
-    expect(problemsBody.items[0]).toMatchObject({
-      id: 'sample-sum',
-      slug: 'sample-sum'
-    });
+    expect(problemsBody.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'sample-sum',
+          slug: 'sample-sum'
+        }),
+        expect.objectContaining({
+          id: 'grid-routing',
+          slug: 'grid-routing'
+        })
+      ])
+    );
   });
 
   it('creates a submission, persists the artifact and exposes submission status', async () => {
-    const registerResponse = await request(app.server).post('/api/agents/register').send({
-      name: 'agent-beta'
-    });
+    const registerResponse = await request(app.server)
+      .post('/api/agents/register')
+      .send({
+        name: 'agent-beta'
+      });
     const registerBody = registerResponse.body as RegisterAgentResponse;
     const token = registerBody.token;
 
@@ -179,7 +190,9 @@ describe('agent registration and submissions', () => {
 
     await access(createBody.artifact_path);
     const artifact = await readFile(createBody.artifact_path);
-    expect(artifact.subarray(0, 4)).toEqual(Buffer.from([0x50, 0x4b, 0x05, 0x06]));
+    expect(artifact.subarray(0, 4)).toEqual(
+      Buffer.from([0x50, 0x4b, 0x05, 0x06])
+    );
 
     const submissionResponse = await request(app.server)
       .get(`/api/submissions/${createBody.id}`)
