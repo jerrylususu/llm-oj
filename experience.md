@@ -223,3 +223,14 @@ submission 详情页同时展示 `Public Primary`、`Hidden Score` 和原始 eva
 
 如何避免：
 后续只要数据库结果要进入严格 DTO/schema 校验层，就不要默认时间字段已经是字符串；应在 DB presenter 或 mapper 层显式归一化时间类型，避免运行期才被 schema 打回。
+
+## 2026-04-11 Fastify 路由拆模块时，preHandler 和 app/logger 泛型要一开始就对齐
+
+问题：
+把 `apps/api/src/app.ts` 拆成独立 `routes/*.ts` 后，如果 route 注册函数继续用过宽或不匹配的 Fastify 类型，容易同时触发两类问题：`async preHandler` 被 lint 误判为 `void` 回调，以及 `FastifyInstance` 的 logger 泛型与实际 `pino` logger 不一致，导致 `tsc -b` 在装配层报大段类型错误。
+
+如何解决：
+把 auth hook 明确声明为 `preHandlerAsyncHookHandler`，并在 route 模块里把 `FastifyInstance` 的泛型收敛到与当前 app 一致的 `Server/IncomingMessage/ServerResponse/Logger` 组合；同时给请求/回复参数补显式类型，避免拆层后退化成隐式 `any`。
+
+如何避免：
+以后做 Fastify 大文件拆分时，先把“app 类型、logger 类型、async hook 类型”作为基础模板固定下来，再写路由函数；否则业务代码还没出错，框架签名噪声就会先把 lint 和 build 打红。

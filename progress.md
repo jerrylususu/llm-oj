@@ -109,3 +109,4 @@
 2026-04-11T00:19:43+08:00 开始执行 refactor-20260411.md 的 R1-R4，并先核对范围、仓库状态与现有记录文件。
 2026-04-11T00:41:04+08:00 已建立 packages/contracts 初版，开始把 shared/db/api/tests 切到统一评测与 API schema。
 2026-04-11T01:12:23+08:00 已完成 R1 自验收，contracts、统一请求校验和评测领域类型全部落地，并通过 lint、build、unit、integration。
+2026-04-11T01:57:59+08:00 已完成 R2 自验收，app.ts 缩减为装配层，API 路由拆分为 http、routes、services、presenters 并通过全量验证。
