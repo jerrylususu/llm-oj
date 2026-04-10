@@ -5,6 +5,6 @@
     "rootDir": ".",
     "outDir": "dist"
   },
-  "references": [{ "path": "../shared" }],
+  "references": [{ "path": "../contracts" }, { "path": "../shared" }],
   "include": ["src/**/*.ts", "test/**/*.ts"]
 }

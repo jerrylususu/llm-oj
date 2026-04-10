@@ -8,6 +8,11 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import request from 'supertest';
 
 import { createApiApp } from '@llm-oj/api';
+import {
+  createSubmissionResponseSchema,
+  registerAgentResponseSchema,
+  submissionResponseSchema
+} from '@llm-oj/contracts';
 import { createDatabasePool, defaultMigrationsDir, queryRows, runMigrations } from '@llm-oj/db';
 import { createLogger, createServiceConfig } from '@llm-oj/shared';
 import { runWorkerCycle } from '@llm-oj/worker';
@@ -133,7 +138,7 @@ describe('public eval worker cycle', () => {
     const registerResponse = await request(apiApp.server).post('/api/agents/register').send({
       name: 'worker-e2e-agent'
     });
-    const token = (registerResponse.body as { token: string }).token;
+    const token = registerAgentResponseSchema.parse(registerResponse.body).token;
     const artifactBase64 = await createSubmissionZipBase64(workspaceRoot);
 
     const createResponse = await request(apiApp.server)
@@ -144,39 +149,26 @@ describe('public eval worker cycle', () => {
         artifact_base64: artifactBase64,
         explanation: 'public eval smoke test'
       });
-    const submissionId = (createResponse.body as { id: string }).id;
+    const submissionId = createSubmissionResponseSchema.parse(createResponse.body).id;
 
     await runWorkerCycle({ config: workerConfig, db, logger: workerLogger });
 
     const submissionResponse = await request(apiApp.server)
       .get(`/api/submissions/${submissionId}`)
       .set('Authorization', `Bearer ${token}`);
-    const submissionBody = submissionResponse.body as {
-      status: string;
-      visible_after_eval: boolean;
-      evaluation: {
-        status: string;
-        primary_score: number;
-        hidden_summary: {
-          score: number;
-          passed: number;
-          total: number;
-        };
-        shown_results: Array<{ case_id: string; status: string; score: number }>;
-      };
-    };
+    const submissionBody = submissionResponseSchema.parse(submissionResponse.body);
 
     expect(submissionResponse.status).toBe(200);
     expect(submissionBody.status).toBe('completed');
     expect(submissionBody.visible_after_eval).toBe(true);
-    expect(submissionBody.evaluation.status).toBe('completed');
-    expect(submissionBody.evaluation.primary_score).toBe(1);
-    expect(submissionBody.evaluation.hidden_summary).toEqual({
+    expect(submissionBody.evaluation?.status).toBe('completed');
+    expect(submissionBody.evaluation?.primary_score).toBe(1);
+    expect(submissionBody.evaluation?.hidden_summary).toEqual({
       score: 1,
       passed: 2,
       total: 2
     });
-    expect(submissionBody.evaluation.shown_results).toHaveLength(2);
+    expect(submissionBody.evaluation?.shown_results).toHaveLength(2);
 
     const jobRows = await queryRows<{ status: string }>(
       db,
@@ -197,7 +189,7 @@ describe('public eval worker cycle', () => {
     const registerResponse = await request(apiApp.server).post('/api/agents/register').send({
       name: 'worker-failure-agent'
     });
-    const token = (registerResponse.body as { token: string }).token;
+    const token = registerAgentResponseSchema.parse(registerResponse.body).token;
     const artifactBase64 = await createSubmissionZipBase64(workspaceRoot);
 
     const createResponse = await request(apiApp.server)
@@ -208,7 +200,7 @@ describe('public eval worker cycle', () => {
         artifact_base64: artifactBase64,
         explanation: 'public eval failure test'
       });
-    const submissionId = (createResponse.body as { id: string }).id;
+    const submissionId = createSubmissionResponseSchema.parse(createResponse.body).id;
 
     await db.query(
       `
@@ -224,17 +216,7 @@ describe('public eval worker cycle', () => {
     const submissionResponse = await request(apiApp.server)
       .get(`/api/submissions/${submissionId}`)
       .set('Authorization', `Bearer ${token}`);
-    const submissionBody = submissionResponse.body as {
-      status: string;
-      visible_after_eval: boolean;
-      evaluation: {
-        status: string;
-        primary_score: number | null;
-      } | null;
-      evaluation_job: {
-        status: string;
-      } | null;
-    };
+    const submissionBody = submissionResponseSchema.parse(submissionResponse.body);
 
     expect(submissionResponse.status).toBe(200);
     expect(submissionBody.status).toBe('failed');

@@ -1,12 +1,10 @@
 {
-  "name": "@llm-oj/worker",
+  "name": "@llm-oj/contracts",
   "version": "0.1.0",
   "private": true,
   "main": "dist/src/index.js",
   "types": "dist/src/index.d.ts",
   "dependencies": {
-    "@llm-oj/contracts": "*",
-    "@llm-oj/db": "*",
-    "@llm-oj/shared": "*"
+    "zod": "^3.24.3"
   }
 }

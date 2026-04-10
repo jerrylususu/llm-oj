@@ -5,6 +5,16 @@ import { existsSync } from 'node:fs';
 import type { Pool } from 'pg';
 
 import {
+  type EvaluationRecord,
+  jsonObjectSchema,
+  parseEvaluationRecord,
+  scoreSummarySchema,
+  shownCaseResultSchema,
+  type JsonObject,
+  type ScoreSummary,
+  type ShownCaseResult
+} from '@llm-oj/contracts';
+import {
   type ProblemBundleSpec,
   hashAgentToken,
   shouldReplaceLeaderboardEntry,
@@ -16,7 +26,7 @@ export interface AgentRecord {
   readonly name: string;
   readonly description: string;
   readonly owner: string;
-  readonly modelInfo: Record<string, unknown>;
+  readonly modelInfo: JsonObject;
   readonly status: string;
   readonly createdAt: string;
 }
@@ -34,7 +44,7 @@ export interface RegisterAgentInput {
   readonly name: string;
   readonly description: string;
   readonly owner: string;
-  readonly modelInfo: Record<string, unknown>;
+  readonly modelInfo: JsonObject;
 }
 
 export interface ProblemVersionRecord {
@@ -100,42 +110,9 @@ export interface SubmissionRecord {
   readonly updatedAt: string;
   readonly evaluationJobId: string | null;
   readonly evaluationJobStatus: string | null;
-  readonly evaluation: {
-    readonly id: string;
-    readonly status: string;
-    readonly evalType: string;
-    readonly primaryScore: number | null;
-    readonly shownResults: unknown;
-    readonly hiddenSummary: unknown;
-    readonly officialSummary: unknown;
-    readonly logPath: string | null;
-    readonly startedAt: string | null;
-    readonly finishedAt: string | null;
-  } | null;
-  readonly publicEvaluation: {
-    readonly id: string;
-    readonly status: string;
-    readonly evalType: string;
-    readonly primaryScore: number | null;
-    readonly shownResults: unknown;
-    readonly hiddenSummary: unknown;
-    readonly officialSummary: unknown;
-    readonly logPath: string | null;
-    readonly startedAt: string | null;
-    readonly finishedAt: string | null;
-  } | null;
-  readonly officialEvaluation: {
-    readonly id: string;
-    readonly status: string;
-    readonly evalType: string;
-    readonly primaryScore: number | null;
-    readonly shownResults: unknown;
-    readonly hiddenSummary: unknown;
-    readonly officialSummary: unknown;
-    readonly logPath: string | null;
-    readonly startedAt: string | null;
-    readonly finishedAt: string | null;
-  } | null;
+  readonly evaluation: EvaluationRecord | null;
+  readonly publicEvaluation: EvaluationRecord | null;
+  readonly officialEvaluation: EvaluationRecord | null;
 }
 
 export interface EvaluationJobPayload {
@@ -166,9 +143,9 @@ export interface EvaluationResultInput {
 export interface PersistedEvaluationResult extends EvaluationResultInput {
   readonly status: 'completed' | 'failed';
   readonly primaryScore: number | null;
-  readonly shownResults: unknown;
-  readonly hiddenSummary: unknown;
-  readonly officialSummary: unknown;
+  readonly shownResults: ShownCaseResult[];
+  readonly hiddenSummary: ScoreSummary | null;
+  readonly officialSummary: ScoreSummary | null;
   readonly logPath: string | null;
   readonly lastError: string | null;
 }
@@ -333,25 +310,45 @@ function mapEvaluationRow(row: {
   hidden_summary_json: unknown;
   official_summary_json: unknown;
   log_path: string | null;
-  started_at: string | null;
-  finished_at: string | null;
+  started_at: string | Date | null;
+  finished_at: string | Date | null;
 }) {
   if (!row.id) {
     return null;
   }
 
-  return {
+  return parseEvaluationRecord({
     id: row.id,
-    status: row.status ?? 'unknown',
+    status: row.status ?? 'queued',
     evalType: row.eval_type ?? 'public',
     primaryScore: row.primary_score,
-    shownResults: row.shown_results_json,
-    hiddenSummary: row.hidden_summary_json,
-    officialSummary: row.official_summary_json,
+    shownResults: parseShownResults(row.shown_results_json),
+    hiddenSummary: parseScoreSummary(row.hidden_summary_json),
+    officialSummary: parseScoreSummary(row.official_summary_json),
     logPath: row.log_path,
-    startedAt: row.started_at,
-    finishedAt: row.finished_at
-  };
+    startedAt: formatTimestamp(row.started_at),
+    finishedAt: formatTimestamp(row.finished_at)
+  });
+}
+
+function parseShownResults(input: unknown): ShownCaseResult[] {
+  return shownCaseResultSchema.array().parse(input ?? []);
+}
+
+function parseScoreSummary(input: unknown): ScoreSummary | null {
+  if (input === null || input === undefined) {
+    return null;
+  }
+
+  return scoreSummarySchema.parse(input);
+}
+
+function formatTimestamp(input: string | Date | null): string | null {
+  if (input === null) {
+    return null;
+  }
+
+  return input instanceof Date ? input.toISOString() : input;
 }
 
 export async function registerAgent(pool: Pool, input: RegisterAgentInput): Promise<AgentRecord> {
@@ -366,7 +363,7 @@ export async function registerAgent(pool: Pool, input: RegisterAgentInput): Prom
       name: string;
       description: string;
       owner: string;
-      model_info: Record<string, unknown>;
+      model_info: unknown;
       status: string;
       created_at: string;
     }>(
@@ -404,7 +401,7 @@ export async function registerAgent(pool: Pool, input: RegisterAgentInput): Prom
       name: row.name,
       description: row.description,
       owner: row.owner,
-      modelInfo: row.model_info,
+      modelInfo: jsonObjectSchema.parse(row.model_info),
       status: row.status,
       createdAt: row.created_at
     };
@@ -930,8 +927,8 @@ export async function getSubmissionById(
     public_hidden_summary_json: unknown;
     public_official_summary_json: unknown;
     public_evaluation_log_path: string | null;
-    public_evaluation_started_at: string | null;
-    public_evaluation_finished_at: string | null;
+    public_evaluation_started_at: string | Date | null;
+    public_evaluation_finished_at: string | Date | null;
     official_evaluation_id: string | null;
     official_evaluation_status: string | null;
     official_evaluation_eval_type: string | null;
@@ -940,8 +937,8 @@ export async function getSubmissionById(
     official_hidden_summary_json: unknown;
     official_official_summary_json: unknown;
     official_evaluation_log_path: string | null;
-    official_evaluation_started_at: string | null;
-    official_evaluation_finished_at: string | null;
+    official_evaluation_started_at: string | Date | null;
+    official_evaluation_finished_at: string | Date | null;
   }>(
     `
       SELECT
@@ -1372,23 +1369,23 @@ export async function markEvaluationFinished(
   }
 
   if (input.status === 'completed' && input.evalType === 'public') {
-    const hiddenSummary = input.hiddenSummary as { score?: number } | null;
-
-    if (typeof hiddenSummary?.score === 'number') {
+    if (typeof input.hiddenSummary?.score === 'number') {
       await upsertLeaderboardEntryForSubmission(
         pool,
         input.submissionId,
-        hiddenSummary.score,
+        input.hiddenSummary.score,
         input.shownResults
       );
     }
   }
 
   if (input.status === 'completed' && input.evalType === 'official') {
-    const officialSummary = input.officialSummary as { score?: number } | null;
-
-    if (typeof officialSummary?.score === 'number') {
-      await updateOfficialScoreForSubmission(pool, input.submissionId, officialSummary.score);
+    if (typeof input.officialSummary?.score === 'number') {
+      await updateOfficialScoreForSubmission(
+        pool,
+        input.submissionId,
+        input.officialSummary.score
+      );
     }
   }
 }
@@ -1397,7 +1394,7 @@ export async function upsertLeaderboardEntryForSubmission(
   pool: Pool,
   submissionId: string,
   hiddenScore: number,
-  shownSummary: unknown
+  shownResults: ShownCaseResult[]
 ): Promise<void> {
   const submissionRows = await pool.query<{
     problem_id: string;
@@ -1455,7 +1452,7 @@ export async function upsertLeaderboardEntryForSubmission(
       submission.agent_id,
       submissionId,
       hiddenScore,
-      JSON.stringify(shownSummary)
+      JSON.stringify(shownResults)
     ]
   );
 }

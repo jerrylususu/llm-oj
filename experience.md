@@ -201,3 +201,25 @@ submission 详情页同时展示 `Public Primary`、`Hidden Score` 和原始 eva
 
 如何避免：
 后续对自动 seed、fixtures 或演示数据做断言时，优先验证“必须存在的对象或字段”，不要轻易把数量写死；只有业务协议明确承诺固定数量时才允许这样做。
+
+## 2026-04-11 新增 workspace 包后，先刷新 npm workspaces 链接再跑 TypeScript
+
+问题：
+新增 `packages/contracts` 并让 `shared/db/api/tests` 依赖它之后，`tsc -b` 直接报 `Cannot find module '@llm-oj/contracts'`，即使源码和 `tsconfig` 引用都已补齐。
+
+如何解决：
+在补完根 `tsconfig` 引用和各 workspace `package.json` 依赖后，立即执行一次 `npm install`，让 npm 更新 `package-lock.json` 和本地 workspace 链接；随后 `tsc -b` 就能正确解析新包。
+
+如何避免：
+以后只要在 monorepo 里新增本地 workspace 包，不要只改源码和 `tsconfig`；要把“更新依赖声明 + 刷新 workspace 链接”视为同一个原子步骤，否则最先失败的通常是类型检查。
+
+## 2026-04-11 PostgreSQL timestamp 在 pg 查询结果里可能是 Date，不能假定一定是字符串
+
+问题：
+把 evaluation 结果收口为严格 contracts 后，`getSubmissionById()` 在映射 `started_at`/`finished_at` 时触发 `ZodError`，因为 `pg` 返回的是 `Date` 对象，而 schema 约定的是 ISO 字符串。
+
+如何解决：
+在 `packages/db/src/platform.ts` 的 evaluation 映射层统一做时间序列化，把 `Date` 转成 `toISOString()`，再交给 contracts schema 校验。
+
+如何避免：
+后续只要数据库结果要进入严格 DTO/schema 校验层，就不要默认时间字段已经是字符串；应在 DB presenter 或 mapper 层显式归一化时间类型，避免运行期才被 schema 打回。

@@ -9,7 +9,19 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import { marked } from 'marked';
 import type { Pool } from 'pg';
 import type { Logger } from 'pino';
+import type { ZodType } from 'zod';
 
+import {
+  createDiscussionReplyRequestSchema,
+  createDiscussionThreadRequestSchema,
+  createProblemRequestSchema,
+  createProblemVersionRequestSchema,
+  createSubmissionRequestSchema,
+  evaluationDtoSchema,
+  type EvaluationRecord,
+  registerAgentRequestSchema,
+  type EvaluationDto
+} from '@llm-oj/contracts';
 import {
   authenticateAgentToken,
   checkDatabase,
@@ -58,41 +70,6 @@ declare module 'fastify' {
   }
 }
 
-interface RegisterAgentBody {
-  readonly name: string;
-  readonly description?: string;
-  readonly owner?: string;
-  readonly model_info?: Record<string, unknown>;
-}
-
-interface CreateSubmissionBody {
-  readonly problem_id: string;
-  readonly artifact_base64: string;
-  readonly explanation?: string;
-  readonly parent_submission_id?: string;
-  readonly credit_text?: string;
-}
-
-interface CreateDiscussionThreadBody {
-  readonly title: string;
-  readonly body: string;
-}
-
-interface CreateDiscussionReplyBody {
-  readonly body: string;
-}
-
-interface CreateProblemBody {
-  readonly id: string;
-  readonly slug?: string;
-  readonly title: string;
-  readonly description?: string;
-}
-
-interface CreateProblemVersionBody {
-  readonly bundle_path: string;
-}
-
 export interface CreateApiAppOptions {
   readonly config: ServiceConfig;
   readonly db: Pool;
@@ -109,39 +86,16 @@ function isLikelyZip(buffer: Buffer): boolean {
     buffer.subarray(0, 4).equals(Buffer.from([0x50, 0x4b, 0x07, 0x08]));
 }
 
-function escapeHtml(value: string): string {
-  return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;');
-}
-
 async function readStatementMarkdown(statementPath: string): Promise<string> {
   return readFile(statementPath, 'utf8');
 }
 
-function serializeEvaluation(
-  evaluation:
-    | {
-        readonly id: string;
-        readonly status: string;
-        readonly evalType: string;
-        readonly primaryScore: number | null;
-        readonly shownResults: unknown;
-        readonly hiddenSummary: unknown;
-        readonly officialSummary: unknown;
-        readonly logPath: string | null;
-        readonly startedAt: string | null;
-        readonly finishedAt: string | null;
-      }
-    | null
-) {
+function serializeEvaluation(evaluation: EvaluationRecord | null): EvaluationDto | null {
   if (!evaluation) {
     return null;
   }
 
-  return {
+  return evaluationDtoSchema.parse({
     id: evaluation.id,
     status: evaluation.status,
     eval_type: evaluation.evalType,
@@ -152,7 +106,7 @@ function serializeEvaluation(
     log_path: evaluation.logPath,
     started_at: evaluation.startedAt,
     finished_at: evaluation.finishedAt
-  };
+  });
 }
 
 function resolveBundlePath(problemsRoot: string, bundlePath: string): string {
@@ -188,6 +142,34 @@ async function requireAgentAuth(request: FastifyRequest, reply: FastifyReply): P
   }
 
   request.agentAuth = authenticated;
+}
+
+function zodMessage(error: { issues: Array<{ message: string; path: Array<string | number> }> }): string {
+  const firstIssue = error.issues[0];
+
+  if (!firstIssue) {
+    return '请求体不合法';
+  }
+
+  return firstIssue.message;
+}
+
+function parseRequestBody<T>(
+  schema: ZodType<T>,
+  payload: unknown,
+  reply: FastifyReply
+): T | null {
+  const parsed = schema.safeParse(payload);
+
+  if (!parsed.success) {
+    void reply.code(400).send({
+      error: 'bad_request',
+      message: zodMessage(parsed.error)
+    });
+    return null;
+  }
+
+  return parsed.data;
 }
 
 export function createApiApp(options: CreateApiAppOptions) {
@@ -246,14 +228,10 @@ export function createApiApp(options: CreateApiAppOptions) {
     }
   }
 
-  app.post<{ Body: RegisterAgentBody }>('/api/agents/register', async (request, reply) => {
-    const body = request.body;
-
-    if (!body?.name?.trim()) {
-      return reply.code(400).send({
-        error: 'bad_request',
-        message: 'name 不能为空'
-      });
+  app.post('/api/agents/register', async (request, reply) => {
+    const body = parseRequestBody(registerAgentRequestSchema, request.body, reply);
+    if (!body) {
+      return;
     }
 
     const token = createAgentToken();
@@ -263,7 +241,7 @@ export function createApiApp(options: CreateApiAppOptions) {
         agentId: randomUUID(),
         tokenId: randomUUID(),
         token,
-        name: body.name.trim(),
+        name: body.name,
         description: body.description?.trim() ?? '',
         owner: body.owner?.trim() ?? '',
         modelInfo: body.model_info ?? {}
@@ -384,30 +362,19 @@ export function createApiApp(options: CreateApiAppOptions) {
     }
   );
 
-  app.post<{ Body: CreateSubmissionBody }>(
+  app.post(
     '/api/submissions',
     { preHandler: requireAgentAuth },
     async (request, reply) => {
-      const body = request.body;
+      const body = parseRequestBody(createSubmissionRequestSchema, request.body, reply);
+      if (!body) {
+        return;
+      }
 
       if (!request.agentAuth) {
         return reply.code(401).send({
           error: 'unauthorized',
           message: 'token 无效或已被撤销'
-        });
-      }
-
-      if (!body?.problem_id?.trim()) {
-        return reply.code(400).send({
-          error: 'bad_request',
-          message: 'problem_id 不能为空'
-        });
-      }
-
-      if (!body?.artifact_base64?.trim()) {
-        return reply.code(400).send({
-          error: 'bad_request',
-          message: 'artifact_base64 不能为空'
         });
       }
 
@@ -440,7 +407,7 @@ export function createApiApp(options: CreateApiAppOptions) {
           submissionId,
           jobId: randomUUID(),
           agentId: request.agentAuth.agentId,
-          problemId: body.problem_id.trim(),
+          problemId: body.problem_id,
           artifactPath,
           explanation: body.explanation?.trim() ?? '',
           parentSubmissionId: body.parent_submission_id?.trim() || null,
@@ -605,24 +572,20 @@ export function createApiApp(options: CreateApiAppOptions) {
     });
   });
 
-  app.post<{ Body: CreateProblemBody }>(
+  app.post(
     '/admin/problems',
     { preHandler: requireAdminAuth },
     async (request, reply) => {
-      const body = request.body;
-
-      if (!body?.id?.trim() || !body?.title?.trim()) {
-        return reply.code(400).send({
-          error: 'bad_request',
-          message: 'id 和 title 不能为空'
-        });
+      const body = parseRequestBody(createProblemRequestSchema, request.body, reply);
+      if (!body) {
+        return;
       }
 
       try {
         const problem = await createOrUpdateProblem(options.db, {
-          id: body.id.trim(),
-          slug: body.slug?.trim() || body.id.trim(),
-          title: body.title.trim(),
+          id: body.id,
+          slug: body.slug?.trim() || body.id,
+          title: body.title,
           description: body.description?.trim() ?? ''
         });
 
@@ -645,22 +608,20 @@ export function createApiApp(options: CreateApiAppOptions) {
     }
   );
 
-  app.post<{ Params: { id: string }; Body: CreateProblemVersionBody }>(
+  app.post<{ Params: { id: string } }>(
     '/admin/problems/:id/versions',
     { preHandler: requireAdminAuth },
     async (request, reply) => {
-      if (!request.body?.bundle_path?.trim()) {
-        return reply.code(400).send({
-          error: 'bad_request',
-          message: 'bundle_path 不能为空'
-        });
+      const body = parseRequestBody(createProblemVersionRequestSchema, request.body, reply);
+      if (!body) {
+        return;
       }
 
       try {
         const problemsRoot = path.resolve(process.cwd(), options.config.env.PROBLEMS_ROOT);
         const version = await publishProblemVersion(options.db, {
           problemId: request.params.id,
-          bundlePath: resolveBundlePath(problemsRoot, request.body.bundle_path.trim())
+          bundlePath: resolveBundlePath(problemsRoot, body.bundle_path)
         });
 
         return reply.code(201).send({
@@ -823,21 +784,19 @@ export function createApiApp(options: CreateApiAppOptions) {
 </html>`);
   });
 
-  app.post<{ Params: { id: string }; Body: CreateDiscussionThreadBody }>(
+  app.post<{ Params: { id: string } }>(
     '/api/problems/:id/discussions',
     { preHandler: requireAgentAuth },
     async (request, reply) => {
+      const body = parseRequestBody(createDiscussionThreadRequestSchema, request.body, reply);
+      if (!body) {
+        return;
+      }
+
       if (!request.agentAuth) {
         return reply.code(401).send({
           error: 'unauthorized',
           message: 'token 无效或已被撤销'
-        });
-      }
-
-      if (!request.body?.title?.trim() || !request.body?.body?.trim()) {
-        return reply.code(400).send({
-          error: 'bad_request',
-          message: 'title 和 body 不能为空'
         });
       }
 
@@ -847,8 +806,8 @@ export function createApiApp(options: CreateApiAppOptions) {
           id: threadId,
           problemId: request.params.id,
           agentId: request.agentAuth.agentId,
-          title: request.body.title.trim(),
-          body: request.body.body.trim()
+          title: body.title,
+          body: body.body
         });
 
         return reply.code(201).send({
@@ -863,21 +822,19 @@ export function createApiApp(options: CreateApiAppOptions) {
     }
   );
 
-  app.post<{ Params: { id: string }; Body: CreateDiscussionReplyBody }>(
+  app.post<{ Params: { id: string } }>(
     '/api/discussions/:id/replies',
     { preHandler: requireAgentAuth },
     async (request, reply) => {
+      const body = parseRequestBody(createDiscussionReplyRequestSchema, request.body, reply);
+      if (!body) {
+        return;
+      }
+
       if (!request.agentAuth) {
         return reply.code(401).send({
           error: 'unauthorized',
           message: 'token 无效或已被撤销'
-        });
-      }
-
-      if (!request.body?.body?.trim()) {
-        return reply.code(400).send({
-          error: 'bad_request',
-          message: 'body 不能为空'
         });
       }
 
@@ -887,7 +844,7 @@ export function createApiApp(options: CreateApiAppOptions) {
           id: replyId,
           threadId: request.params.id,
           agentId: request.agentAuth.agentId,
-          body: request.body.body.trim()
+          body: body.body
         });
 
         return reply.code(201).send({

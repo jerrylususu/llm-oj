@@ -1,3 +1,4 @@
+import type { ScoreSummary, ShownCaseResult } from '@llm-oj/contracts';
 import type {
   DiscussionThreadRecord,
   LeaderboardEntryRecord,
@@ -9,7 +10,16 @@ import type {
 import type { SubmissionArtifactSummary } from './submission-artifact';
 
 function escapeHtml(value: unknown): string {
-  return String(value ?? '')
+  const text =
+    typeof value === 'string'
+      ? value
+      : typeof value === 'number' || typeof value === 'boolean'
+        ? String(value)
+        : value == null
+          ? ''
+          : JSON.stringify(value);
+
+  return text
     .replaceAll('&', '&amp;')
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;')
@@ -916,27 +926,8 @@ function renderSubmissionMetadata(submission: SubmissionRecord): string {
   </div>`;
 }
 
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
-}
-
-function asCaseResults(value: unknown): Array<Record<string, unknown>> {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-
-  return value.filter(
-    (entry): entry is Record<string, unknown> =>
-      Boolean(entry) && typeof entry === 'object' && !Array.isArray(entry)
-  );
-}
-
-function averageScore(results: Array<Record<string, unknown>>): number | null {
-  const scores = results
-    .map((result) => result.score)
-    .filter((score): score is number => typeof score === 'number');
+function averageScore(results: ShownCaseResult[]): number | null {
+  const scores = results.map((result) => result.score);
 
   if (scores.length === 0) {
     return null;
@@ -949,7 +940,7 @@ function averageScore(results: Array<Record<string, unknown>>): number | null {
 
 function renderAggregateSummary(
   title: string,
-  summary: Record<string, unknown> | null,
+  summary: ScoreSummary | null,
   emptyText: string
 ): string {
   if (!summary) {
@@ -962,18 +953,16 @@ function renderAggregateSummary(
   return `<section class="panel soft">
     <div class="eyebrow">${escapeHtml(title)}</div>
     <div class="key-list">
-      <div class="key-row"><span>score</span><strong>${formatScore(typeof summary.score === 'number' ? summary.score : null)}</strong></div>
-      <div class="key-row"><span>passed</span><strong>${escapeHtml(summary.passed ?? '-')}</strong></div>
-      <div class="key-row"><span>total</span><strong>${escapeHtml(summary.total ?? '-')}</strong></div>
+      <div class="key-row"><span>score</span><strong>${formatScore(summary.score)}</strong></div>
+      <div class="key-row"><span>passed</span><strong>${escapeHtml(summary.passed)}</strong></div>
+      <div class="key-row"><span>total</span><strong>${escapeHtml(summary.total)}</strong></div>
     </div>
   </section>`;
 }
 
 function renderEvaluationSection(
   title: string,
-  evaluation:
-    | SubmissionRecord['publicEvaluation']
-    | SubmissionRecord['officialEvaluation'],
+  evaluation: SubmissionRecord['publicEvaluation'],
   options: {
     readonly primaryLabel: string;
     readonly helperText?: string;
@@ -986,17 +975,17 @@ function renderEvaluationSection(
     </section>`;
   }
 
-  const shownResults = asCaseResults(evaluation.shownResults);
-  const hiddenSummary = asRecord(evaluation.hiddenSummary);
-  const officialSummary = asRecord(evaluation.officialSummary);
+  const shownResults = evaluation.shownResults;
+  const hiddenSummary = evaluation.hiddenSummary;
+  const officialSummary = evaluation.officialSummary;
   const shownAverage = averageScore(shownResults);
   const shownRows = shownResults
     .map(
       (result) => `
         <tr>
-          <td>${escapeHtml(result.case_id ?? '-')}</td>
-          <td>${escapeHtml(result.status ?? '-')}</td>
-          <td>${formatScore(typeof result.score === 'number' ? result.score : null)}</td>
+          <td>${escapeHtml(result.case_id)}</td>
+          <td>${escapeHtml(result.status)}</td>
+          <td>${formatScore(result.score)}</td>
           <td>${escapeHtml(result.message ?? '-')}</td>
         </tr>`
     )
@@ -1117,8 +1106,8 @@ export function renderSubmissionPage(input: {
           <div class="eyebrow">scores</div>
           <div class="kpi-grid">
             <div class="kpi"><div class="kpi-label">Public Score</div><div class="kpi-value">${formatScore(input.submission.publicEvaluation?.primaryScore)}</div></div>
-            <div class="kpi"><div class="kpi-label">Shown Average</div><div class="kpi-value">${formatScore(averageScore(asCaseResults(input.submission.publicEvaluation?.shownResults)))}</div></div>
-            <div class="kpi"><div class="kpi-label">Official Score</div><div class="kpi-value">${formatScore((input.submission.officialEvaluation?.officialSummary as { score?: number } | null)?.score)}</div></div>
+            <div class="kpi"><div class="kpi-label">Shown Average</div><div class="kpi-value">${formatScore(averageScore(input.submission.publicEvaluation?.shownResults ?? []))}</div></div>
+            <div class="kpi"><div class="kpi-label">Official Score</div><div class="kpi-value">${formatScore(input.submission.officialEvaluation?.officialSummary?.score)}</div></div>
             <div class="kpi"><div class="kpi-label">Visible</div><div class="kpi-value">${input.submission.visibleAfterEval ? 'yes' : 'no'}</div></div>
           </div>
           <p class="evaluation-note">当前 public score 取评测结果里的 primary score。对现有题包来说，它通常等于 hidden dataset summary；shown cases 主要用于解释路径质量，不直接决定排行榜。</p>

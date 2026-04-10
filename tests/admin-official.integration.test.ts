@@ -8,6 +8,11 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { createApiApp } from '@llm-oj/api';
 import {
+  leaderboardResponseSchema,
+  parseProblemBundleSpec,
+  submissionResponseSchema
+} from '@llm-oj/contracts';
+import {
   createDatabasePool,
   defaultMigrationsDir,
   queryRows,
@@ -95,12 +100,11 @@ async function createAdminBundle(rootDir: string): Promise<string> {
   await cp(sampleBundleRoot, bundleDir, { recursive: true });
 
   const specPath = path.join(bundleDir, 'spec.json');
-  const spec = JSON.parse(await readFile(specPath, 'utf8')) as {
-    problem_id: string;
-    problem_title: string;
+  const spec = {
+    ...parseProblemBundleSpec(JSON.parse(await readFile(specPath, 'utf8'))),
+    problem_id: 'admin-sum',
+    problem_title: 'Admin Sum'
   };
-  spec.problem_id = 'admin-sum';
-  spec.problem_title = 'Admin Sum';
   await writeFile(specPath, JSON.stringify(spec, null, 2), 'utf8');
 
   await writeFile(
@@ -344,31 +348,24 @@ describe('admin official run flow', () => {
       method: 'GET',
       url: `/api/public/submissions/${submissionBId}`
     });
-    const publicSubmissionAfterOfficialBody =
-      publicSubmissionAfterOfficial.json<{
-        public_evaluation: { hidden_summary: { score: number } };
-        official_evaluation: { official_summary: { score: number } };
-      }>();
+    const publicSubmissionAfterOfficialBody = submissionResponseSchema.parse(
+      publicSubmissionAfterOfficial.json()
+    );
     expect(publicSubmissionAfterOfficial.statusCode).toBe(200);
     expect(
-      publicSubmissionAfterOfficialBody.public_evaluation.hidden_summary.score
+      publicSubmissionAfterOfficialBody.public_evaluation?.hidden_summary?.score
     ).toBe(0);
     expect(
-      publicSubmissionAfterOfficialBody.official_evaluation.official_summary
-        .score
+      publicSubmissionAfterOfficialBody.official_evaluation?.official_summary?.score
     ).toBe(1);
 
     const leaderboardAfterOfficial = await apiApp.inject({
       method: 'GET',
       url: '/api/public/problems/admin-sum/leaderboard'
     });
-    const leaderboardAfterBody = leaderboardAfterOfficial.json<{
-      items: Array<{
-        agent_name: string;
-        best_hidden_score: number;
-        official_score: number | null;
-      }>;
-    }>();
+    const leaderboardAfterBody = leaderboardResponseSchema.parse(
+      leaderboardAfterOfficial.json()
+    );
     expect(leaderboardAfterBody.items.map((item) => item.agent_name)).toEqual([
       'admin-agent-a',
       'admin-agent-b'
@@ -409,17 +406,15 @@ describe('admin official run flow', () => {
       method: 'GET',
       url: `/api/public/submissions/${submissionBId}`
     });
-    const publicSubmissionAfterRejudgeBody = publicSubmissionAfterRejudge.json<{
-      public_evaluation: { hidden_summary: { score: number } };
-      official_evaluation: { official_summary: { score: number } };
-    }>();
+    const publicSubmissionAfterRejudgeBody = submissionResponseSchema.parse(
+      publicSubmissionAfterRejudge.json()
+    );
     expect(publicSubmissionAfterRejudge.statusCode).toBe(200);
     expect(
-      publicSubmissionAfterRejudgeBody.public_evaluation.hidden_summary.score
+      publicSubmissionAfterRejudgeBody.public_evaluation?.hidden_summary?.score
     ).toBe(0);
     expect(
-      publicSubmissionAfterRejudgeBody.official_evaluation.official_summary
-        .score
+      publicSubmissionAfterRejudgeBody.official_evaluation?.official_summary?.score
     ).toBe(1);
 
     const hideResponse = await apiApp.inject({

@@ -1,18 +1,11 @@
 import { afterAll, describe, expect, it } from 'vitest';
 import request from 'supertest';
 
+import { healthResponseSchema } from '@llm-oj/contracts';
 import { createDatabasePool, defaultMigrationsDir, runMigrations } from '@llm-oj/db';
 import { createLogger, createServiceConfig } from '@llm-oj/shared';
 
 import { createApiApp } from '../src/app';
-
-interface HealthResponseBody {
-  readonly status: string;
-  readonly service: string;
-  readonly database: {
-    readonly connected: boolean;
-  };
-}
 
 const databaseUrl =
   process.env.TEST_DATABASE_URL ??
@@ -42,7 +35,7 @@ describe('GET /healthz', () => {
     await app.ready();
 
     const response = await request(app.server).get('/healthz');
-    const body = response.body as HealthResponseBody;
+    const body = healthResponseSchema.parse(response.body);
 
     expect(response.status).toBe(200);
     expect(body.status).toBe('ok');

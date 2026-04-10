@@ -9,6 +9,17 @@ import request from 'supertest';
 
 import { createApiApp } from '@llm-oj/api';
 import {
+  createSubmissionResponseSchema,
+  discussionListResponseSchema,
+  idOnlyResponseSchema,
+  leaderboardResponseSchema,
+  problemDetailResponseSchema,
+  publicSubmissionListResponseSchema,
+  registerAgentResponseSchema,
+  submissionArtifactResponseSchema,
+  submissionResponseSchema
+} from '@llm-oj/contracts';
+import {
   createDatabasePool,
   defaultMigrationsDir,
   runMigrations
@@ -152,8 +163,8 @@ describe('public read APIs and pages', () => {
     const agentB = await request(apiApp.server)
       .post('/api/agents/register')
       .send({ name: 'leader-b' });
-    const tokenA = (agentA.body as { token: string }).token;
-    const tokenB = (agentB.body as { token: string }).token;
+    const tokenA = registerAgentResponseSchema.parse(agentA.body).token;
+    const tokenB = registerAgentResponseSchema.parse(agentB.body).token;
     const goodArtifact = await createSubmissionZipBase64(
       workspaceRoot,
       "payload['a'] + payload['b']"
@@ -171,7 +182,7 @@ describe('public read APIs and pages', () => {
         artifact_base64: goodArtifact,
         explanation: 'perfect score'
       });
-    const pendingId = (pendingResponse.body as { id: string }).id;
+    const pendingId = createSubmissionResponseSchema.parse(pendingResponse.body).id;
 
     const hiddenBefore = await request(apiApp.server).get(
       `/api/public/submissions/${pendingId}`
@@ -202,12 +213,7 @@ describe('public read APIs and pages', () => {
     const publicSubmission = await request(apiApp.server).get(
       `/api/public/submissions/${pendingId}`
     );
-    const publicSubmissionBody = publicSubmission.body as {
-      visible_after_eval: boolean;
-      agent_name: string;
-      parent_submission_id: string | null;
-      created_at: string;
-    };
+    const publicSubmissionBody = submissionResponseSchema.parse(publicSubmission.body);
     expect(publicSubmission.status).toBe(200);
     expect(publicSubmissionBody.visible_after_eval).toBe(true);
     expect(publicSubmissionBody.agent_name).toBe('leader-a');
@@ -217,13 +223,9 @@ describe('public read APIs and pages', () => {
     const publicSubmissionList = await request(apiApp.server).get(
       '/api/public/problems/sample-sum/submissions'
     );
-    const publicSubmissionListBody = publicSubmissionList.body as {
-      items: Array<{
-        id: string;
-        agent_name: string;
-        hidden_score: number;
-      }>;
-    };
+    const publicSubmissionListBody = publicSubmissionListResponseSchema.parse(
+      publicSubmissionList.body
+    );
     expect(publicSubmissionList.status).toBe(200);
     expect(publicSubmissionListBody.items).toHaveLength(2);
     expect(
@@ -238,14 +240,7 @@ describe('public read APIs and pages', () => {
     const artifactResponse = await request(apiApp.server).get(
       `/api/public/submissions/${pendingId}/artifact`
     );
-    const artifactBody = artifactResponse.body as {
-      file_count: number;
-      files: Array<{
-        path: string;
-        language: string;
-        content: string | null;
-      }>;
-    };
+    const artifactBody = submissionArtifactResponseSchema.parse(artifactResponse.body);
     expect(artifactResponse.status).toBe(200);
     expect(artifactBody.file_count).toBe(1);
     expect(artifactBody.files[0]?.path).toBe('main.py');
@@ -257,12 +252,7 @@ describe('public read APIs and pages', () => {
     const leaderboardResponse = await request(apiApp.server).get(
       '/api/public/problems/sample-sum/leaderboard'
     );
-    const leaderboardBody = leaderboardResponse.body as {
-      items: Array<{
-        agent_name: string;
-        best_hidden_score: number;
-      }>;
-    };
+    const leaderboardBody = leaderboardResponseSchema.parse(leaderboardResponse.body);
     expect(leaderboardResponse.status).toBe(200);
     expect(leaderboardBody.items).toHaveLength(2);
     const firstItem = leaderboardBody.items[0];
@@ -315,11 +305,7 @@ describe('public read APIs and pages', () => {
     const publicProblemResponse = await request(apiApp.server).get(
       '/api/public/problems/grid-routing'
     );
-    const publicProblemBody = publicProblemResponse.body as {
-      title: string;
-      description: string;
-      statement_markdown: string;
-    };
+    const publicProblemBody = problemDetailResponseSchema.parse(publicProblemResponse.body);
 
     expect(publicProblemResponse.status).toBe(200);
     expect(publicProblemBody.title).toBe('Grid Routing');
@@ -346,7 +332,7 @@ describe('public read APIs and pages', () => {
       .send({
         name: 'discussion-agent'
       });
-    const token = (registerResponse.body as { token: string }).token;
+    const token = registerAgentResponseSchema.parse(registerResponse.body).token;
 
     const threadResponse = await request(apiApp.server)
       .post('/api/problems/sample-sum/discussions')
@@ -355,7 +341,7 @@ describe('public read APIs and pages', () => {
         title: 'How to improve score?',
         body: 'I think the hidden cases are all integer addition.'
       });
-    const threadId = (threadResponse.body as { id: string }).id;
+    const threadId = idOnlyResponseSchema.parse(threadResponse.body).id;
 
     const replyResponse = await request(apiApp.server)
       .post(`/api/discussions/${threadId}/replies`)
@@ -370,12 +356,7 @@ describe('public read APIs and pages', () => {
     const discussionsResponse = await request(apiApp.server).get(
       '/api/public/problems/sample-sum/discussions'
     );
-    const discussionsBody = discussionsResponse.body as {
-      items: Array<{
-        title: string;
-        replies: Array<{ id: string }>;
-      }>;
-    };
+    const discussionsBody = discussionListResponseSchema.parse(discussionsResponse.body);
     expect(discussionsResponse.status).toBe(200);
     const firstDiscussion = discussionsBody.items[0];
     expect(firstDiscussion).toBeDefined();

@@ -6,6 +6,13 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import request from 'supertest';
 
 import {
+  createSubmissionResponseSchema,
+  problemDetailResponseSchema,
+  problemListResponseSchema,
+  registerAgentResponseSchema,
+  submissionResponseSchema
+} from '@llm-oj/contracts';
+import {
   createDatabasePool,
   defaultMigrationsDir,
   queryRows,
@@ -24,41 +31,6 @@ const emptyZipBase64 = Buffer.from([
   0x50, 0x4b, 0x05, 0x06, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
 ]).toString('base64');
-
-interface RegisterAgentResponse {
-  readonly agent_id: string;
-  readonly token: string;
-}
-
-interface ProblemListResponse {
-  readonly items: Array<{
-    readonly id: string;
-    readonly slug: string;
-  }>;
-}
-
-interface ProblemDetailResponse {
-  readonly current_version: {
-    readonly version: string;
-  };
-}
-
-interface CreateSubmissionResponse {
-  readonly id: string;
-  readonly status: string;
-  readonly problem_id: string;
-  readonly artifact_path: string;
-}
-
-interface SubmissionStatusResponse {
-  readonly id: string;
-  readonly status: string;
-  readonly problem_id: string;
-  readonly visible_after_eval: boolean;
-  readonly evaluation_job: {
-    readonly status: string;
-  };
-}
 
 describe('agent registration and submissions', () => {
   let storageRoot = '';
@@ -113,7 +85,7 @@ describe('agent registration and submissions', () => {
           model: 'gpt-test'
         }
       });
-    const registerBody = registerResponse.body as RegisterAgentResponse;
+    const registerBody = registerAgentResponseSchema.parse(registerResponse.body);
 
     expect(registerResponse.status).toBe(201);
     expect(registerBody.agent_id).toBeTruthy();
@@ -130,7 +102,7 @@ describe('agent registration and submissions', () => {
     const problemsResponse = await request(app.server)
       .get('/api/problems')
       .set('Authorization', `Bearer ${registerBody.token}`);
-    const problemsBody = problemsResponse.body as ProblemListResponse;
+    const problemsBody = problemListResponseSchema.parse(problemsResponse.body);
 
     expect(problemsResponse.status).toBe(200);
     expect(problemsBody.items).toEqual(
@@ -153,13 +125,13 @@ describe('agent registration and submissions', () => {
       .send({
         name: 'agent-beta'
       });
-    const registerBody = registerResponse.body as RegisterAgentResponse;
+    const registerBody = registerAgentResponseSchema.parse(registerResponse.body);
     const token = registerBody.token;
 
     const detailResponse = await request(app.server)
       .get('/api/problems/sample-sum')
       .set('Authorization', `Bearer ${token}`);
-    const detailBody = detailResponse.body as ProblemDetailResponse;
+    const detailBody = problemDetailResponseSchema.parse(detailResponse.body);
 
     expect(detailResponse.status).toBe(200);
     expect(detailBody.current_version.version).toBe('v1');
@@ -182,7 +154,7 @@ describe('agent registration and submissions', () => {
         artifact_base64: emptyZipBase64,
         explanation: 'phase 3 integration test'
       });
-    const createBody = createResponse.body as CreateSubmissionResponse;
+    const createBody = createSubmissionResponseSchema.parse(createResponse.body);
 
     expect(createResponse.status).toBe(201);
     expect(createBody.status).toBe('queued');
@@ -197,7 +169,7 @@ describe('agent registration and submissions', () => {
     const submissionResponse = await request(app.server)
       .get(`/api/submissions/${createBody.id}`)
       .set('Authorization', `Bearer ${token}`);
-    const submissionBody = submissionResponse.body as SubmissionStatusResponse;
+    const submissionBody = submissionResponseSchema.parse(submissionResponse.body);
 
     expect(submissionResponse.status).toBe(200);
     expect(submissionBody).toMatchObject({
@@ -206,7 +178,7 @@ describe('agent registration and submissions', () => {
       problem_id: 'sample-sum',
       visible_after_eval: false
     });
-    expect(submissionBody.evaluation_job.status).toBe('queued');
+    expect(submissionBody.evaluation_job?.status).toBe('queued');
 
     const dbRows = await queryRows<{ artifact_path: string; status: string }>(
       db,
