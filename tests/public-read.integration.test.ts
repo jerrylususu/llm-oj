@@ -34,6 +34,12 @@ const databaseUrl =
   'postgres://llm_oj:llm_oj@127.0.0.1:5432/llm_oj_test';
 const problemsRoot = path.resolve(process.cwd(), 'examples/problems');
 
+function expectSpaShell(html: string): void {
+  expect(html).toContain('<div id="root"></div>');
+  expect(html).toContain('__LLM_OJ_API_BASE_URL__');
+  expect(html).toContain('/assets/');
+}
+
 async function createSubmissionZipBase64(
   workspaceRoot: string,
   expression: string
@@ -279,29 +285,20 @@ describe('public read APIs and pages', () => {
     );
 
     expect(catalogPage.status).toBe(200);
-    expect(catalogPage.text).toContain('Problem Catalog');
-    expect(catalogPage.text).toContain('sample-sum');
+    expectSpaShell(catalogPage.text);
     expect(problemPage.status).toBe(200);
-    expect(problemPage.text).toContain('Sample Sum');
-    expect(problemPage.text).toContain('recent public submissions');
+    expectSpaShell(problemPage.text);
     expect(submissionsPage.status).toBe(200);
-    expect(submissionsPage.text).toContain('public submissions');
-    expect(submissionsPage.text).toContain('leader-a');
+    expectSpaShell(submissionsPage.text);
     expect(submissionPage.status).toBe(200);
-    expect(submissionPage.text).toContain(pendingId);
-    expect(submissionPage.text).toContain('submission metadata');
-    expect(submissionPage.text).toContain('submission overview');
-    expect(submissionPage.text).toContain('Public Score');
-    expect(submissionPage.text).toContain('shown case breakdown');
-    expect(submissionPage.text).toContain('zip browser');
-    expect(submissionPage.text).toContain('main.py');
+    expectSpaShell(submissionPage.text);
     expect(leaderboardPage.status).toBe(200);
-    expect(leaderboardPage.text).toContain('leader-a');
+    expectSpaShell(leaderboardPage.text);
 
     expect(secondResponse.status).toBe(201);
   });
 
-  it('exposes seeded problem descriptions in public API and human page', async () => {
+  it('exposes seeded problem descriptions in public API and serves the SPA shell for human routes', async () => {
     const publicProblemResponse = await request(apiApp.server).get(
       '/api/public/problems/grid-routing'
     );
@@ -320,10 +317,7 @@ describe('public read APIs and pages', () => {
       '/problems/grid-routing'
     );
     expect(problemPage.status).toBe(200);
-    expect(problemPage.text).toContain('Grid Routing');
-    expect(problemPage.text).toContain('二维网格');
-    expect(problemPage.text).toContain('<meta charset="utf-8" />');
-    expect(problemPage.text).toContain('输入输出约定');
+    expectSpaShell(problemPage.text);
   });
 
   it('creates and lists discussion threads and replies', async () => {
@@ -367,6 +361,6 @@ describe('public read APIs and pages', () => {
       '/problems/sample-sum/discussions'
     );
     expect(discussionPage.status).toBe(200);
-    expect(discussionPage.text).toContain('How to improve score?');
+    expectSpaShell(discussionPage.text);
   });
 });

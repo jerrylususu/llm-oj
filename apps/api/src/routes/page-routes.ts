@@ -3,24 +3,9 @@ import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import type {
   FastifyInstance,
   FastifyReply,
-  FastifyRequest,
   preHandlerAsyncHookHandler
 } from 'fastify';
 import type { Logger } from 'pino';
-
-import {
-  renderDiscussionPage,
-  renderLeaderboardPage,
-  renderProblemCatalogPage,
-  renderProblemPage,
-  renderSubmissionPage,
-  renderSubmissionsPage
-} from '../ui';
-import type { ApiService } from '../services';
-
-function notFoundPage(kind: 'problem' | 'submission'): string {
-  return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8" /><title>${kind} not found</title></head><body><h1>${kind} not found</h1></body></html>`;
-}
 
 function renderAdminConsolePage(): string {
   return `<!doctype html>
@@ -73,107 +58,50 @@ type RouteApp = FastifyInstance<
   ServerResponse<IncomingMessage>,
   Logger
 >;
-type IdParamsRequest = FastifyRequest<{ Params: { id: string } }>;
+
+function renderWebUnavailablePage(): string {
+  return `<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Web build unavailable</title>
+  </head>
+  <body>
+    <h1>Web build unavailable</h1>
+    <p>未找到 apps/web/dist，请先执行 <code>npm run build:web</code>，或使用 <code>npm run dev:web</code> 启动独立前端。</p>
+  </body>
+</html>`;
+}
+
+async function serveWebApp(
+  reply: FastifyReply,
+  options: { readonly hasWebDist: boolean }
+): Promise<FastifyReply> {
+  if (!options.hasWebDist) {
+    return reply
+      .code(503)
+      .type('text/html; charset=utf-8')
+      .send(renderWebUnavailablePage());
+  }
+
+  return reply.type('text/html; charset=utf-8').sendFile('index.html');
+}
 
 export function registerPageRoutes(
   app: RouteApp,
-  service: ApiService,
-  requireAdminAuth: preHandlerAsyncHookHandler
+  requireAdminAuth: preHandlerAsyncHookHandler,
+  options: { readonly hasWebDist: boolean }
 ): void {
-  app.get('/', async (_request: FastifyRequest, reply: FastifyReply) => {
-    const data = await service.getProblemCatalogPageData();
-    return reply.type('text/html; charset=utf-8').send(renderProblemCatalogPage(data.problems));
-  });
+  app.get('/', async (_request, reply) => serveWebApp(reply, options));
 
-  app.get('/admin', { preHandler: requireAdminAuth }, async (_request: FastifyRequest, reply: FastifyReply) => {
+  app.get('/admin', { preHandler: requireAdminAuth }, async (_request, reply) => {
     return reply.type('text/html; charset=utf-8').send(renderAdminConsolePage());
   });
 
-  app.get<{ Params: { id: string } }>('/problems/:id', async (request: IdParamsRequest, reply: FastifyReply) => {
-    const data = await service.getProblemPageData(request.params.id);
-
-    if (!data) {
-      return reply.code(404).type('text/html; charset=utf-8').send(notFoundPage('problem'));
-    }
-
-    return reply
-      .type('text/html; charset=utf-8')
-      .send(
-        renderProblemPage({
-          problem: data.problem,
-          statementHtml: data.statementHtml,
-          submissions: data.submissions,
-          leaderboard: data.leaderboard,
-          discussions: data.discussions
-        })
-      );
-  });
-
-  app.get<{ Params: { id: string } }>('/problems/:id/submissions', async (request: IdParamsRequest, reply: FastifyReply) => {
-    const data = await service.getProblemSubmissionsPageData(request.params.id);
-
-    if (!data) {
-      return reply.code(404).type('text/html; charset=utf-8').send(notFoundPage('problem'));
-    }
-
-    return reply
-      .type('text/html; charset=utf-8')
-      .send(
-        renderSubmissionsPage({
-          problem: data.problem,
-          submissions: data.submissions
-        })
-      );
-  });
-
-  app.get<{ Params: { id: string } }>('/problems/:id/leaderboard', async (request: IdParamsRequest, reply: FastifyReply) => {
-    const data = await service.getProblemLeaderboardPageData(request.params.id);
-
-    if (!data) {
-      return reply.code(404).type('text/html; charset=utf-8').send(notFoundPage('problem'));
-    }
-
-    return reply
-      .type('text/html; charset=utf-8')
-      .send(
-        renderLeaderboardPage({
-          problem: data.problem,
-          entries: data.entries
-        })
-      );
-  });
-
-  app.get<{ Params: { id: string } }>('/problems/:id/discussions', async (request: IdParamsRequest, reply: FastifyReply) => {
-    const data = await service.getProblemDiscussionPageData(request.params.id);
-
-    if (!data) {
-      return reply.code(404).type('text/html; charset=utf-8').send(notFoundPage('problem'));
-    }
-
-    return reply
-      .type('text/html; charset=utf-8')
-      .send(
-        renderDiscussionPage({
-          problem: data.problem,
-          threads: data.threads
-        })
-      );
-  });
-
-  app.get<{ Params: { id: string } }>('/submissions/:id', async (request: IdParamsRequest, reply: FastifyReply) => {
-    const data = await service.getSubmissionPageData(request.params.id);
-
-    if (!data) {
-      return reply.code(404).type('text/html; charset=utf-8').send(notFoundPage('submission'));
-    }
-
-    return reply
-      .type('text/html; charset=utf-8')
-      .send(
-        renderSubmissionPage({
-          submission: data.submission,
-          artifact: data.artifact
-        })
-      );
-  });
+  app.get('/problems/:id', async (_request, reply) => serveWebApp(reply, options));
+  app.get('/problems/:id/submissions', async (_request, reply) => serveWebApp(reply, options));
+  app.get('/problems/:id/leaderboard', async (_request, reply) => serveWebApp(reply, options));
+  app.get('/problems/:id/discussions', async (_request, reply) => serveWebApp(reply, options));
+  app.get('/submissions/:id', async (_request, reply) => serveWebApp(reply, options));
 }

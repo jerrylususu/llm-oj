@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { existsSync } from 'node:fs';
 
 import fastifyStatic from '@fastify/static';
 import Fastify from 'fastify';
@@ -22,6 +23,8 @@ export function createApiApp(options: CreateApiAppOptions) {
   const app = Fastify({
     loggerInstance: options.logger
   });
+  const webDistRoot = path.resolve(process.cwd(), 'apps/web/dist');
+  const hasWebDist = existsSync(webDistRoot);
   const service = createApiService({
     config: options.config,
     db: options.db
@@ -31,10 +34,12 @@ export function createApiApp(options: CreateApiAppOptions) {
 
   app.decorateRequest('agentAuth', null);
 
-  void app.register(fastifyStatic, {
-    root: path.resolve(process.cwd(), 'node_modules/monaco-editor/min'),
-    prefix: '/assets/monaco/'
-  });
+  if (hasWebDist) {
+    void app.register(fastifyStatic, {
+      root: webDistRoot,
+      prefix: '/'
+    });
+  }
 
   app.addHook('onReady', async () => {
     await service.seedProblemsOnReady();
@@ -47,7 +52,7 @@ export function createApiApp(options: CreateApiAppOptions) {
     requireAgentAuth,
     requireAdminAuth
   });
-  registerPageRoutes(app, service, requireAdminAuth);
+  registerPageRoutes(app, requireAdminAuth, { hasWebDist });
 
   return app;
 }

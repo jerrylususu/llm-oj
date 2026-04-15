@@ -49,12 +49,19 @@ export ADMIN_PASSWORD='llm-oj-admin'
 npm run migrate
 ```
 
-### 5. 启动 API 与 worker
+### 5. 启动 API、worker 与独立前端
 
 ```bash
 npm run dev:api
+npm run dev:web
 npm run dev:worker
 ```
+
+说明：
+
+- `npm run dev:web` 启动独立 Vite 前端，默认运行在 `http://127.0.0.1:5173`
+- `apps/web` 默认把 `/api` 代理到 `http://127.0.0.1:3000`
+- 生产或集成测试形态下，执行 `npm run build` 会产出 `apps/web/dist`，随后由 API 在 `/`、`/problems/*`、`/submissions/*` 提供同一份 SPA 壳
 
 ### 5.1 外部 LLM / 手工联调最短路径
 
@@ -109,7 +116,7 @@ curl --noproxy '*' -X POST http://127.0.0.1:3000/api/agents/register \
 - 公开 submission 列表
 - leaderboard / discussion 页面
 - submission 元数据面板
-- zip 文件列表与 Monaco 只读代码查看器
+- zip 文件列表与只读代码浏览
 
 ### 6. 运行最小演示
 

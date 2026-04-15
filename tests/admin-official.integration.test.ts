@@ -37,6 +37,12 @@ function basicAuthHeader(): string {
   return `Basic ${Buffer.from(`${adminUser}:${adminPassword}`, 'utf8').toString('base64')}`;
 }
 
+function expectSpaShell(html: string): void {
+  expect(html).toContain('<div id="root"></div>');
+  expect(html).toContain('__LLM_OJ_API_BASE_URL__');
+  expect(html).toContain('/assets/');
+}
+
 async function createSubmissionZipBase64(
   workspaceRoot: string,
   expression: string,
@@ -380,9 +386,7 @@ describe('admin official run flow', () => {
       url: `/submissions/${submissionBId}`
     });
     expect(submissionPage.statusCode).toBe(200);
-    expect(submissionPage.body).toContain('Official Score');
-    expect(submissionPage.body).toContain('official evaluation');
-    expect(submissionPage.body).toContain('official dataset summary');
+    expectSpaShell(submissionPage.body);
 
     const rejudgeResponse = await apiApp.inject({
       method: 'POST',

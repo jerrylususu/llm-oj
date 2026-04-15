@@ -3,7 +3,6 @@ import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import { marked } from 'marked';
 import type { Pool } from 'pg';
 
 import type {
@@ -247,90 +246,6 @@ export function createApiService(options: ApiServiceOptions) {
       });
 
       return replyId;
-    },
-
-    async getProblemCatalogPageData() {
-      const problems = await listPublishedProblems(options.db);
-      return { problems };
-    },
-
-    async getProblemPageData(problemIdOrSlug: string) {
-      const detail = await getProblemDetail(problemIdOrSlug);
-
-      if (!detail) {
-        return null;
-      }
-
-      const [statementHtml, submissions, leaderboard, discussions] = await Promise.all([
-        marked.parse(detail.statementMarkdown),
-        listPublicSubmissionsForProblem(options.db, detail.problem.problemId),
-        listLeaderboardEntries(options.db, detail.problem.problemId),
-        listDiscussionThreads(options.db, detail.problem.problemId)
-      ]);
-
-      return {
-        problem: detail.problem,
-        statementHtml,
-        submissions,
-        leaderboard,
-        discussions
-      };
-    },
-
-    async getProblemSubmissionsPageData(problemIdOrSlug: string) {
-      const detail = await getProblemDetail(problemIdOrSlug);
-
-      if (!detail) {
-        return null;
-      }
-
-      const submissions = await listPublicSubmissionsForProblem(options.db, detail.problem.problemId);
-      return {
-        problem: detail.problem,
-        submissions
-      };
-    },
-
-    async getProblemLeaderboardPageData(problemIdOrSlug: string) {
-      const detail = await getProblemDetail(problemIdOrSlug);
-
-      if (!detail) {
-        return null;
-      }
-
-      const entries = await listLeaderboardEntries(options.db, detail.problem.problemId);
-      return {
-        problem: detail.problem,
-        entries
-      };
-    },
-
-    async getProblemDiscussionPageData(problemIdOrSlug: string) {
-      const detail = await getProblemDetail(problemIdOrSlug);
-
-      if (!detail) {
-        return null;
-      }
-
-      const threads = await listDiscussionThreads(options.db, detail.problem.problemId);
-      return {
-        problem: detail.problem,
-        threads
-      };
-    },
-
-    async getSubmissionPageData(submissionId: string) {
-      const submission = await getPublicSubmission(submissionId);
-
-      if (!submission) {
-        return null;
-      }
-
-      const artifact = await readSubmissionArtifactSummary(submission.artifactPath);
-      return {
-        submission,
-        artifact
-      };
     }
   };
 }

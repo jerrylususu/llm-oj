@@ -11,9 +11,10 @@
     "npm": ">=11.4.2"
   },
   "scripts": {
-    "build": "tsc -b",
+    "build": "tsc -b && npm run build:web",
     "clean": "rm -rf apps/*/dist packages/*/dist coverage",
     "dev:api": "tsx apps/api/src/server.ts",
+    "dev:web": "vite --config apps/web/vite.config.ts",
     "dev:worker": "tsx apps/worker/src/main.ts",
     "infra:up": "docker compose up -d postgres",
     "infra:down": "docker compose down",
@@ -29,9 +30,13 @@
     "test:e2e:grid-routing-iteration": "tsx scripts/test-grid-routing-iteration.ts",
     "test:e2e:official-run": "tsx scripts/test-official-run.ts",
     "test:integration": "npm run build && vitest run --config vitest.integration.config.ts",
-    "typecheck": "tsc -b --pretty false"
+    "typecheck": "tsc -b --pretty false",
+    "build:web": "vite build --config apps/web/vite.config.ts"
   },
   "devDependencies": {
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
+    "@vitejs/plugin-react": "^5.1.0",
     "@eslint/js": "^9.25.1",
     "@types/node": "^24.3.0",
     "@types/pg": "^8.15.5",
@@ -43,6 +48,7 @@
     "tsx": "^4.19.4",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.30.1",
+    "vite": "^7.1.11",
     "vitest": "^3.1.1"
   }
 }

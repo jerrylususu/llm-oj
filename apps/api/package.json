@@ -10,8 +10,6 @@
     "@llm-oj/db": "*",
     "@llm-oj/shared": "*",
     "fastify": "^5.3.3",
-    "jszip": "^3.10.1",
-    "marked": "^17.0.6",
-    "monaco-editor": "^0.55.1"
+    "jszip": "^3.10.1"
   }
 }
