@@ -224,6 +224,28 @@ submission 详情页同时展示 `Public Primary`、`Hidden Score` 和原始 eva
 如何避免：
 后续只要数据库结果要进入严格 DTO/schema 校验层，就不要默认时间字段已经是字符串；应在 DB presenter 或 mapper 层显式归一化时间类型，避免运行期才被 schema 打回。
 
+## 2026-04-11 新增前端 workspace 后，不补安装与工程引用会同时卡死 TypeScript 和 ESLint
+
+问题：
+新增 `apps/web` 后，如果只写 `package.json`、`tsconfig` 和源码，不立即刷新 workspace 依赖并把 `vite.config.ts` 纳入工程引用，`typecheck` 会报 `react` / `react-router-dom` 缺失，`lint` 还会额外报 `vite.config.ts was not found by the project service`。
+
+如何解决：
+先执行一次 `npm install` 刷新 workspace 链接和 lockfile，再在 `apps/web/src/env.d.ts` 显式声明 `VITE_API_BASE_URL`，并把 `apps/web/vite.config.ts` 加进 `apps/web/tsconfig.json` 的 `include`。
+
+如何避免：
+以后新增一级前端工作区时，把“安装依赖”“补环境变量类型”“把配置文件纳入 project service”当成同一个原子步骤；不要等到 lint/typecheck 分别报错后再零散修补。
+
+## 2026-04-11 Vite 构建直接吃 workspace CJS 包时，命名导出可能在 Rollup 阶段失效
+
+问题：
+`apps/web` 在生产构建时直接依赖 `@llm-oj/contracts` 的 workspace 产物，Vite/Rollup 读取到的是 `packages/contracts/dist` 下的 CommonJS 入口，随后对 `problemListResponseSchema` 这类命名导出报 “is not exported by .../dist/src/index.js”。
+
+如何解决：
+在 `apps/web/vite.config.ts` 里显式把 `@llm-oj/contracts` 别名到 `../../packages/contracts/src/index.ts`，让前端构建直接消费源码入口，而不是走 workspace 的 CJS 产物。
+
+如何避免：
+以后凡是 Vite 前端需要消费本地 workspace 包，都先确认该包对前端构建暴露的是 ESM 还是 CJS；如果暂时只有 CJS，就优先用源码 alias 或补独立 ESM 导出，不要等 Rollup 在 build 阶段才发现命名导出不可见。
+
 ## 2026-04-11 Fastify 路由拆模块时，preHandler 和 app/logger 泛型要一开始就对齐
 
 问题：
@@ -234,3 +256,14 @@ submission 详情页同时展示 `Public Primary`、`Hidden Score` 和原始 eva
 
 如何避免：
 以后做 Fastify 大文件拆分时，先把“app 类型、logger 类型、async hook 类型”作为基础模板固定下来，再写路由函数；否则业务代码还没出错，框架签名噪声就会先把 lint 和 build 打红。
+
+## 2026-04-15 前端主题默认值不能写死，否则会违背 follow system 要求
+
+问题：
+原来的前端主题 hook 在本地没有存储值时直接回退到 `dark`，这会让页面首次打开时无视 `prefers-color-scheme`，与“默认跟随系统、允许手动指定”的要求冲突。
+
+如何解决：
+把主题状态拆成 `system | light | dark` 三种模式，默认存储 `system`；同时监听 `matchMedia('(prefers-color-scheme: dark)')` 变化，只有在 `system` 模式下才使用系统解析出的明暗主题。
+
+如何避免：
+以后只要产品要求“默认跟随系统但可手动覆盖”，就不要把存储值直接设计成二元明暗开关；应一开始就保留显式的 `system` 模式，否则后面一定要返工状态结构和 UI 控件。
