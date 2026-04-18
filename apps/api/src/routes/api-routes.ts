@@ -106,6 +106,11 @@ export function registerApiRoutes(options: ApiRouteOptions): void {
     }
   );
 
+  app.get('/api/public/problems', async (_request: FastifyRequest, reply: FastifyReply) => {
+    const problems = await service.listProblems();
+    return reply.send(presentProblemList(problems));
+  });
+
   app.get<{ Params: { id: string } }>('/api/public/problems/:id', async (request: IdParamsRequest, reply: FastifyReply) => {
     const detail = await service.getProblemDetail(request.params.id);
 
